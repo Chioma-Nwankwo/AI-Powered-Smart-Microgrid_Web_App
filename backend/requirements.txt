@@ -7,3 +7,5 @@ pulp>=2.7.0
 
 # Use existing dependencies from parent
 # (psycopg2-binary, pymongo, bcrypt, etc. already installed in venv)
+
+gunicorn
