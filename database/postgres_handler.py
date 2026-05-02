@@ -17,10 +17,16 @@ class PostgresHandler:
     
     def __init__(self):
         """Initialize PostgreSQL connection pool"""
+        host = config.POSTGRES_HOST
+        if host in ('localhost', '127.0.0.1', ''):
+            # No production PostgreSQL — skip silently. MongoDB is the production database.
+            logger.info("PostgreSQL: localhost host — skipping (MongoDB in use)")
+            self.connection_pool = None
+            return
         try:
             self.connection_pool = psycopg2.pool.SimpleConnectionPool(
                 1, 20,
-                host=config.POSTGRES_HOST,
+                host=host,
                 port=config.POSTGRES_PORT,
                 database=config.POSTGRES_DB,
                 user=config.POSTGRES_USER,
@@ -28,7 +34,7 @@ class PostgresHandler:
             )
             logger.info("PostgreSQL connection pool created successfully")
         except Exception as e:
-            logger.error(f"Error creating PostgreSQL connection pool: {e}")
+            logger.warning(f"PostgreSQL connection failed (non-fatal): {e}")
             self.connection_pool = None
     
     @contextmanager
