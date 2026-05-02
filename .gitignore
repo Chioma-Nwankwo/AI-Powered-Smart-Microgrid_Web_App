@@ -1,0 +1,61 @@
+# Environment
+.env
+.venv
+venv/
+ENV/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Streamlit
+.streamlit/secrets.toml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Models
+models/saved_models/*.pkl
+models/saved_models/*.h5
+models/saved_models/*.joblib
+
+# Data
+*.db
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Distribution
+dist/
+build/
+*.egg-info/
+
+microgrid-ui/node_modules/
+backend/node_modules/
+node_modules/
+
+models/trained/*.pkl
+models/trained/
+models/saved_models/
+
+data/processed/*.csv
+data/processed/
+
+# Claude internal files
+.claude/
+
+# Git directory (never commit the .git folder itself)
+*.git/

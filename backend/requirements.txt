@@ -1,0 +1,9 @@
+# Flask Backend Requirements
+Flask==3.0.0
+Flask-CORS==4.0.0
+Flask-JWT-Extended==4.6.0
+python-dotenv==1.0.0
+pulp>=2.7.0
+
+# Use existing dependencies from parent
+# (psycopg2-binary, pymongo, bcrypt, etc. already installed in venv)

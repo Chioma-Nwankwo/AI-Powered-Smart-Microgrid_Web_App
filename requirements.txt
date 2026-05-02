@@ -1,0 +1,56 @@
+ # Core Web Framework
+flask==3.0.0
+flask-cors==4.0.0
+flask-jwt-extended==4.6.0
+werkzeug==3.0.1
+
+# Database
+psycopg2-binary==2.9.9
+pymongo==4.6.1
+sqlalchemy==2.0.25
+
+# Authentication & Security
+google-auth==2.27.0
+google-auth-oauthlib==1.2.0
+google-auth-httplib2==0.2.0
+authlib==1.3.0
+python-jose[cryptography]==3.3.0
+passlib==1.7.4
+bcrypt==4.1.2
+pyjwt==2.10.0
+cryptography==42.0.0
+itsdangerous==2.1.2
+
+# Machine Learning & Data Science (using pre-built wheels)
+numpy==1.26.4
+pandas==2.2.2
+scikit-learn==1.4.2
+xgboost==2.0.3
+tensorflow==2.15.0
+joblib==1.3.2
+imbalanced-learn==0.12.0
+keras==3.1.1
+pyomo==6.7.1
+
+# Optimization
+scipy==1.12.0
+pulp==2.7.0
+cvxpy==1.4.2
+
+# Visualization
+matplotlib==3.8.3
+seaborn==0.13.2
+plotly==5.20.0
+
+# Utilities
+python-dotenv==1.0.0
+requests==2.31.0
+pydantic==2.5.3
+python-multipart==0.0.6
+email-validator==2.1.0
+openpyxl==3.1.2
+python-dateutil==2.8.2
+
+# Cloud & Deployment
+gunicorn==21.2.0
+watchdog==3.0.0
