@@ -12,4 +12,18 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react':  ['react', 'react-dom', 'react-router-dom'],
+          'vendor-mapbox': ['mapbox-gl', 'react-map-gl'],
+          'vendor-charts': ['recharts'],
+          'vendor-auth':   ['@azure/msal-browser', '@azure/msal-react', '@react-oauth/google'],
+          'vendor-utils':  ['axios', 'date-fns', 'lucide-react'],
+        },
+      },
+    },
+  },
 });
