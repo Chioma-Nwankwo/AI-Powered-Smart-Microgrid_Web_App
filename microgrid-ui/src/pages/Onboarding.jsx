@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import GridBackground from '../components/GridBackground';
 import { Zap, MapPin, Building2, ClipboardList, CheckCircle } from 'lucide-react';
-import axios from 'axios';
+import { detectLocation, updateProfile } from '../services/api';
+import useIsMobile from '../hooks/useIsMobile';
 
 const COUNTRIES_LIST = [
   { key: 'nigeria',   flag: '🇳🇬', label: 'Nigeria',   states: ['FCT', 'Lagos', 'Kano', 'Rivers', 'Oyo', 'Kaduna', 'Anambra', 'Enugu', 'Imo', 'Other'] },
@@ -94,6 +95,7 @@ const STATE_COORDS = {
 export default function Onboarding({ onComplete }) {
   const { user } = useAuth();
   const navigate  = useNavigate();
+  const isMobile  = useIsMobile();
   const [step,    setStep]    = useState(0);
   const [country, setCountry] = useState('');
   const [state,   setState]   = useState('');
@@ -116,10 +118,10 @@ export default function Onboarding({ onComplete }) {
           : rej(new Error('no geo'))
       ).catch(() => null);
 
-      const params = pos
-        ? `lat=${pos.coords.latitude}&long=${pos.coords.longitude}`
-        : '';
-      const res = await axios.get(`/api/location/detect?${params}`);
+      const res = await detectLocation(
+        pos ? pos.coords.latitude  : null,
+        pos ? pos.coords.longitude : null
+      );
       const d   = res.data;
 
       // Match detected country to one of our 4 supported countries
@@ -159,12 +161,7 @@ export default function Onboarding({ onComplete }) {
         .map(([k, v]) => `${k}: ${v}`)
         .join(', ') || 'completed';
 
-      const token = localStorage.getItem('jwt_token');
-      await axios.put(
-        '/api/user/profile',
-        { country, state, building_type: btype, address },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await updateProfile({ country, state, building_type: btype, address });
 
       // Look up state-level coordinates for map navigation
       const coords = STATE_COORDS[country]?.[state] ?? null;
@@ -183,11 +180,11 @@ export default function Onboarding({ onComplete }) {
   };
 
   return (
-    <div style={s.page}>
+    <div style={{ ...s.page, flexDirection: isMobile ? 'column' : 'row' }}>
       <GridBackground />
 
-      {/* Left panel — ambient context */}
-      <div style={s.leftPanel}>
+      {/* Left panel — hidden on mobile */}
+      <div style={{ ...s.leftPanel, display: isMobile ? 'none' : 'flex' }}>
         <div style={s.brand}>
           <div style={s.brandIcon}>
             <Zap size={22} color="#F59E0B" />
@@ -229,8 +226,8 @@ export default function Onboarding({ onComplete }) {
       </div>
 
       {/* Right panel — wizard card */}
-      <div style={s.rightPanel}>
-        <div style={s.card}>
+      <div style={{ ...s.rightPanel, padding: isMobile ? '24px 16px' : '48px 32px' }}>
+        <div style={{ ...s.card, padding: isMobile ? '24px 18px' : '36px 40px' }}>
           {/* Progress stepper */}
           <div style={s.stepper}>
             {STEPS.map(({ label, icon: Icon }, i) => (

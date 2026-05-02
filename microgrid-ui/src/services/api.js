@@ -70,6 +70,15 @@ export const getWeather = async (country) => {
 
 // ── IPGeolocation ────────────────────────────────────────────────────
 
+// Detect user location via the Flask backend (uses IP geolocation server-side)
+export const detectLocation = (lat, lon) =>
+  flaskApi.get('/api/location/detect', {
+    params: lat != null ? { lat, long: lon } : {},
+  });
+
+// Update the logged-in user's profile
+export const updateProfile = (data) => flaskApi.put('/api/user/profile', data);
+
 // Returns which of the 4 study countries the user is in, or null
 export const detectUserCountry = async () => {
   try {

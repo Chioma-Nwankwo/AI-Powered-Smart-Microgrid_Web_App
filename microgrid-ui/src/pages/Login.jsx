@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../context/AuthContext';
+import useIsMobile from '../hooks/useIsMobile';
 import GridBackground from '../components/GridBackground';
 
 const GoogleIcon = () => (
@@ -42,7 +43,8 @@ const FEATURES = [
 
 export default function Login() {
   const { signInWithGoogle, signInWithMicrosoft, loginWithEmail, registerWithEmail } = useAuth();
-  const navigate = useNavigate();
+  const navigate  = useNavigate();
+  const isMobile  = useIsMobile();
   const [loading,          setLoading]          = useState(null);
   const [error,            setError]            = useState('');
   const [email,            setEmail]            = useState('');
@@ -93,8 +95,8 @@ export default function Login() {
     <div style={s.page}>
       <GridBackground />
 
-      {/* Left panel — feature showcase */}
-      <div style={s.leftPanel}>
+      {/* Left panel — hidden on mobile */}
+      <div style={{ ...s.leftPanel, display: isMobile ? 'none' : 'flex' }}>
         <div style={s.leftInner}>
           <div style={s.brand}>
             <div style={s.brandIcon}><GridIcon /></div>
@@ -130,8 +132,8 @@ export default function Login() {
       </div>
 
       {/* Right panel — auth form */}
-      <div style={s.rightPanel}>
-        <div style={s.card} className="fade-up">
+      <div style={{ ...s.rightPanel, width: isMobile ? '100%' : 480, padding: isMobile ? 20 : 40 }}>
+        <div style={{ ...s.card, padding: isMobile ? '28px 20px 22px' : '36px 36px 28px' }} className="fade-up">
           <div style={s.cardHeader}>
             <h1 style={s.title}>{isSignUp && showEmailForm ? 'Create account' : 'Sign in'}</h1>
             <p style={s.subtitle}>{isSignUp && showEmailForm ? 'Join GridAI — complete setup after sign-up' : 'Access your microgrid dashboard'}</p>
