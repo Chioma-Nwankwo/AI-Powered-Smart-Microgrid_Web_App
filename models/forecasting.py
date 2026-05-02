@@ -6,8 +6,14 @@ import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import xgboost as xgb
-from tensorflow import keras
-from tensorflow.keras import layers
+try:
+    from tensorflow import keras
+    from tensorflow.keras import layers
+    _HAS_TENSORFLOW = True
+except ImportError:
+    keras = None
+    layers = None
+    _HAS_TENSORFLOW = False
 import joblib
 from pathlib import Path
 from typing import Dict, Tuple, Optional
