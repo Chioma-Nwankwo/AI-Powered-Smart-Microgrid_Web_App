@@ -5,13 +5,20 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from pathlib import Path
 
-from models.anomaly_detection import (
-    AutoencoderAnomalyDetector,
-    PCAAnomalyDetector,
-    OneClassSVMAnomalyDetector,
-    IsolationForestAnomalyDetector,
-    EnsembleAnomalyDetector
-)
+try:
+    from models.anomaly_detection import (
+        AutoencoderAnomalyDetector,
+        PCAAnomalyDetector,
+        OneClassSVMAnomalyDetector,
+        IsolationForestAnomalyDetector,
+        EnsembleAnomalyDetector,
+    )
+    _HAS_ANOMALY_MODELS = True
+except Exception:
+    _HAS_ANOMALY_MODELS = False
+    AutoencoderAnomalyDetector = PCAAnomalyDetector = None
+    OneClassSVMAnomalyDetector = IsolationForestAnomalyDetector = None
+    EnsembleAnomalyDetector = None
 from utils.data_processor import DataProcessor
 import numpy as np
 import pandas as pd
