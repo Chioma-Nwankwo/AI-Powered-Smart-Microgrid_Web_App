@@ -16,8 +16,8 @@ _WEB_APP_ROOT = str(Path(__file__).parent.parent)
 os.chdir(_WEB_APP_ROOT)
 sys.path.insert(0, _WEB_APP_ROOT)
 
-from flask import Flask, jsonify, request
-from flask_cors import CORS
+import re as _re
+from flask import Flask, jsonify, request, make_response
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 
 from config import config
@@ -32,13 +32,23 @@ app.config['SECRET_KEY'] = config.SECRET_KEY
 app.config['JWT_SECRET_KEY'] = config.JWT_SECRET_KEY
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = config.ACCESS_TOKEN_EXPIRE_MINUTES * 60
 
-# Enable CORS — FRONTEND_URL may be comma-separated for multiple Vercel URLs
-_allowed_origins = ['http://localhost:3000', 'http://localhost:5173']
-for _url in os.environ.get('FRONTEND_URL', '').split(','):
-    _url = _url.strip()
-    if _url:
-        _allowed_origins.append(_url)
-CORS(app, origins=_allowed_origins, supports_credentials=True)
+# Custom CORS — allows localhost dev + any *.vercel.app deployment + FRONTEND_URL
+_VERCEL_RE = _re.compile(r'^https://[a-zA-Z0-9\-]+\.vercel\.app$')
+_DEV_ORIGINS = {'http://localhost:3000', 'http://localhost:5173'}
+
+def _cors_ok(origin):
+    if not origin:
+        return False
+    if origin in _DEV_ORIGINS or _VERCEL_RE.match(origin):
+        return True
+    return origin in {u.strip() for u in os.environ.get('FRONTEND_URL', '').split(',') if u.strip()}
+
+def _set_cors(resp, origin):
+    resp.headers['Access-Control-Allow-Origin']      = origin
+    resp.headers['Access-Control-Allow-Credentials'] = 'true'
+    resp.headers['Access-Control-Allow-Headers']     = 'Content-Type, Authorization'
+    resp.headers['Access-Control-Allow-Methods']     = 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
+    return resp
 
 # Initialize JWT
 jwt = JWTManager(app)
@@ -46,6 +56,20 @@ jwt = JWTManager(app)
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+@app.before_request
+def _handle_preflight():
+    if request.method == 'OPTIONS':
+        origin = request.headers.get('Origin')
+        if _cors_ok(origin):
+            return _set_cors(make_response('', 204), origin)
+
+@app.after_request
+def _add_cors(response):
+    origin = request.headers.get('Origin')
+    if _cors_ok(origin):
+        _set_cors(response, origin)
+    return response
 
 # Health check endpoint
 @app.route('/api/health', methods=['GET'])
