@@ -32,11 +32,12 @@ app.config['SECRET_KEY'] = config.SECRET_KEY
 app.config['JWT_SECRET_KEY'] = config.JWT_SECRET_KEY
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = config.ACCESS_TOKEN_EXPIRE_MINUTES * 60
 
-# Enable CORS for React frontend (localhost dev + deployed Vercel frontend)
-_frontend = os.environ.get('FRONTEND_URL', '')
+# Enable CORS — FRONTEND_URL may be comma-separated for multiple Vercel URLs
 _allowed_origins = ['http://localhost:3000', 'http://localhost:5173']
-if _frontend:
-    _allowed_origins.append(_frontend)
+for _url in os.environ.get('FRONTEND_URL', '').split(','):
+    _url = _url.strip()
+    if _url:
+        _allowed_origins.append(_url)
 CORS(app, origins=_allowed_origins, supports_credentials=True)
 
 # Initialize JWT

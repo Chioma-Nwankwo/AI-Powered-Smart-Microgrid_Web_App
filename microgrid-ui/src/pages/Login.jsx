@@ -73,7 +73,11 @@ export default function Login() {
         await registerWithEmail(email, password);
         navigate('/onboarding');
       } catch (err) {
-        setError(err?.response?.data?.error || 'Registration failed. Try a different email.');
+        if (!err.response) {
+          setError('Cannot reach server. Check your internet connection and try again.');
+        } else {
+          setError(err.response.data?.error || 'Registration failed. Please try again.');
+        }
       } finally {
         setLoading(null);
       }
