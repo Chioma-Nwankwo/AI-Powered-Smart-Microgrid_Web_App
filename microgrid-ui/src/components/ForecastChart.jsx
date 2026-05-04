@@ -53,6 +53,7 @@ export default function ForecastChart({ country }) {
   const [data,      setData]      = useState([]);
   const [active,    setActive]    = useState('solar');
   const [available, setAvailable] = useState([]);
+  const [synthetic, setSynthetic] = useState(false);
   const [loading,   setLoading]   = useState(false);
   const [error,     setError]     = useState(false);
 
@@ -62,6 +63,7 @@ export default function ForecastChart({ country }) {
     getForecast(country, 48)
       .then(({ data: res }) => {
         setAvailable(res.models_available ?? []);
+        setSynthetic(res.using_synthetic ?? false);
         const offsetMs = (COUNTRY_UTC_OFFSET[country] ?? 0) * 3_600_000;
         const rows = (res.forecast ?? []).map(row => ({
           time:      format(new Date(new Date(row.timestamp).getTime() + offsetMs), 'HH:mm'),
@@ -182,9 +184,9 @@ export default function ForecastChart({ country }) {
         )
       }
 
-      {/* No models available message */}
-      {!loading && available.length === 0 && !error && (
-        <p style={s.noModel}>{t('noModel')}</p>
+      {/* Synthetic estimate badge — shown instead of error when no trained models are deployed */}
+      {!loading && synthetic && !error && (
+        <p style={s.noModel}>Physics-based clearsky estimates (ML models not deployed)</p>
       )}
     </div>
   );

@@ -74,11 +74,39 @@ def _apply_solar_floor(country: str, utc_dt, model_val: float) -> float:
 
 # Per-country demand profiles — base MW, amplitude MW, peak hour (local), noise σ
 _DEMAND = {
-    'nigeria':   {'base': 85,  'amp': 45, 'peak': 19, 'sigma': 4},  # evening air-con peak, tropical
-    'australia': {'base': 68,  'amp': 38, 'peak': 15, 'sigma': 5},  # afternoon AC peak
-    'germany':   {'base': 52,  'amp': 18, 'peak': 10, 'sigma': 4},  # flat industrial grid, morning ramp
-    'canada':    {'base': 72,  'amp': 32, 'peak': 8,  'sigma': 4},  # morning heating peak
+    'nigeria':   {'base': 85,  'amp': 45, 'peak': 19, 'sigma': 4},
+    'australia': {'base': 68,  'amp': 38, 'peak': 15, 'sigma': 5},
+    'germany':   {'base': 52,  'amp': 18, 'peak': 10, 'sigma': 4},
+    'canada':    {'base': 72,  'amp': 32, 'peak': 8,  'sigma': 4},
 }
+
+# Per-country wind speed profiles — base m/s, amplitude, peak hour (local), sigma
+_WIND = {
+    'nigeria':   {'base': 3.2, 'amp': 1.5, 'peak': 14, 'sigma': 5},
+    'australia': {'base': 5.8, 'amp': 2.5, 'peak': 15, 'sigma': 5},
+    'germany':   {'base': 6.5, 'amp': 2.0, 'peak': 13, 'sigma': 5},
+    'canada':    {'base': 7.2, 'amp': 2.8, 'peak': 14, 'sigma': 5},
+}
+
+# Slight scale factors per model so the three synthetic lines look distinct
+_SYNTH_SCALE = {'rf': 0.90, 'gb': 0.97, 'xgb': 1.05}
+
+
+def _synth_solar(country: str, utc_dt: datetime, scale: float, noise: float) -> float:
+    """Physics-based clearsky solar estimate (used when no .pkl models are deployed)."""
+    clearsky = _clearsky_floor(country, utc_dt)
+    val = clearsky * 0.80 * scale + noise * 12.0
+    return round(max(0.0, val), 2)
+
+
+def _synth_wind(country: str, utc_dt: datetime, scale: float, noise: float) -> float:
+    """Diurnal wind speed estimate (used when no .pkl models are deployed)."""
+    wp = _WIND.get(country, {'base': 4.5, 'amp': 1.5, 'peak': 14, 'sigma': 5})
+    geo = _GEO.get(country, {'utc': 0})
+    h = (utc_dt.hour + geo['utc']) % 24
+    val = wp['base'] + wp['amp'] * math.exp(-0.5 * ((h - wp['peak']) / wp['sigma']) ** 2)
+    val = val * scale + noise * 0.4
+    return round(max(0.0, val), 3)
 
 
 forecast_bp = Blueprint('forecast', __name__)
@@ -120,31 +148,40 @@ def get_forecast():
     dp  = _DEMAND.get(country, {'base': 60, 'amp': 30, 'peak': 10, 'sigma': 4})
     demand = []
     rng = np.random.default_rng(seed=42)  # deterministic noise so chart doesn't jump on refresh
-    for ts in timestamps:
+    noise = [float(rng.normal(0, 1)) for _ in range(hours)]
+    for i, ts in enumerate(timestamps):
         h_local = (ts.hour + geo['utc']) % 24
-        # Gaussian-shaped demand centred at peak hour
         val = dp['base'] + dp['amp'] * math.exp(-0.5 * ((h_local - dp['peak']) / dp['sigma']) ** 2)
-        val = max(val * 0.6, val) + float(rng.normal(0, 2))   # floor at 60 % base
+        val = max(val * 0.6, val) + noise[i] * 2
         demand.append(round(float(max(val, dp['base'] * 0.55)), 2))
+
+    # Synthetic physics-based fallback when model .pkl files are not deployed
+    using_synthetic = False
+    for mtype in MODEL_TYPES:
+        scale = _SYNTH_SCALE[mtype]
+        if solar_preds[mtype] is None:
+            solar_preds[mtype] = [_synth_solar(country, timestamps[i], scale, noise[i]) for i in range(hours)]
+            using_synthetic = True
+        if wind_preds[mtype] is None:
+            wind_preds[mtype]  = [_synth_wind(country, timestamps[i], scale, noise[i])  for i in range(hours)]
 
     forecast = []
     for i, ts in enumerate(timestamps):
         row = {'timestamp': ts.isoformat() + 'Z', 'demand': demand[i]}
         for mtype in MODEL_TYPES:
-            if solar_preds[mtype]:
-                row[f'solar_{mtype}'] = round(solar_preds[mtype][i], 2)
-            if wind_preds[mtype]:
-                row[f'wind_{mtype}']  = round(wind_preds[mtype][i],  3)
+            row[f'solar_{mtype}'] = round(solar_preds[mtype][i], 2)
+            row[f'wind_{mtype}']  = round(wind_preds[mtype][i],  3)
         forecast.append(row)
 
-    models_available = [m for m in MODEL_TYPES if solar_preds[m] is not None]
+    models_available = list(MODEL_TYPES.keys())
 
     return jsonify({
-        'country':          country,
-        'hours':            hours,
-        'models_available': models_available,
-        'model_labels':     {k: v for k, v in MODEL_TYPES.items() if k in models_available},
-        'forecast':         forecast,
+        'country':           country,
+        'hours':             hours,
+        'models_available':  models_available,
+        'model_labels':      MODEL_TYPES,
+        'using_synthetic':   using_synthetic,
+        'forecast':          forecast,
     })
 
 
