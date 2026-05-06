@@ -8,6 +8,7 @@ import Onboarding    from './pages/Onboarding';
 import ForecastPage  from './pages/ForecastPage';
 import OptimizePage  from './pages/OptimizePage';
 import AnomalyPage   from './pages/AnomalyPage';
+import ReportPage    from './pages/ReportPage';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -80,6 +81,12 @@ export default function App() {
         <PrivateRoute>
           {needsOnboarding(user) ? <Navigate to="/onboarding" replace /> :
             <AnomalyPage selectedCountry={country} onCountryChange={setCountry} />}
+        </PrivateRoute>
+      } />
+      <Route path="/report" element={
+        <PrivateRoute>
+          {needsOnboarding(user) ? <Navigate to="/onboarding" replace /> :
+            <ReportPage selectedCountry={country} onCountryChange={setCountry} />}
         </PrivateRoute>
       } />
       <Route path="/*" element={

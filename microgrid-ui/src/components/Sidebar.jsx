@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, TrendingUp, Zap, AlertTriangle, Settings, LogOut, Wifi } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, Zap, AlertTriangle, Settings, LogOut, Wifi, FileText } from 'lucide-react';
 import { useAuth }     from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { COUNTRIES }   from '../services/api';
@@ -22,6 +22,7 @@ export default function Sidebar({ selectedCountry, onCountryChange }) {
     { to: '/forecast', icon: TrendingUp,      label: t('forecast'),     color: '#10B981' },
     { to: '/optimize', icon: Zap,             label: t('optimization'), color: '#FBBF24' },
     { to: '/anomaly',  icon: AlertTriangle,   label: t('anomaly'),      color: '#F43F5E' },
+    { to: '/report',   icon: FileText,        label: 'Report',          color: '#38BDF8' },
     { to: '/settings', icon: Settings,        label: t('settings'),     color: '#A78BFA' },
   ];
 
