@@ -69,7 +69,8 @@ class User:
 
     @staticmethod
     def update_profile(user_id: str, data: Dict) -> bool:
-        allowed = ['country', 'state', 'building_type', 'address', 'electricity_rate']
+        allowed = ['country', 'state', 'building_type', 'address', 'electricity_rate',
+                   'peak_demand_kw', 'daily_kwh', 'appliances']
         update = {k: v for k, v in data.items() if k in allowed}
         if not update:
             return False

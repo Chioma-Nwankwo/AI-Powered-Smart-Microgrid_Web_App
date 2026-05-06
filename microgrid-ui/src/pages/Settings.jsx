@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { useAuth }     from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { TRANSLATIONS, LANGUAGE_NAMES } from '../i18n/translations';
-import { Settings as SettingsIcon, User, Globe, Sliders, LogOut, Edit2 } from 'lucide-react';
+import { Settings as SettingsIcon, User, Globe, Sliders, LogOut, Edit2, Zap } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
+import ApplianceCalculator from '../components/ApplianceCalculator';
+import { updateProfile } from '../services/api';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 // Country selector re-exported so Settings page can control it too
@@ -11,13 +13,48 @@ export default function Settings({ selectedCountry, onCountryChange }) {
   const { user, signOut } = useAuth();
   const { lang, setLang, t }  = useLanguage();
   const navigate   = useNavigate();
-  const [saved, setSaved]   = useState(false);
-  const [units, setUnits]   = useState(localStorage.getItem('gridai_units') || 'metric');
+  const [saved, setSaved]             = useState(false);
+  const [units, setUnits]             = useState(localStorage.getItem('gridai_units') || 'metric');
+  const [applianceSaved, setApplianceSaved] = useState(false);
+  const [applianceSaving, setApplianceSaving] = useState(false);
+
+  const profile = (() => {
+    try { return JSON.parse(localStorage.getItem('gridai_user') || '{}'); } catch { return {}; }
+  })();
+  const [applianceData, setApplianceData] = useState({
+    appliances: profile.appliances || [],
+    peak_kw:    profile.peak_demand_kw || 0,
+    daily_kwh:  profile.daily_kwh || 0,
+  });
 
   const handleSave = () => {
     localStorage.setItem('gridai_units', units);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleSaveAppliances = async () => {
+    setApplianceSaving(true);
+    try {
+      await updateProfile({
+        appliances:     applianceData.appliances,
+        peak_demand_kw: applianceData.peak_kw,
+        daily_kwh:      applianceData.daily_kwh,
+      });
+      const stored = JSON.parse(localStorage.getItem('gridai_user') || '{}');
+      localStorage.setItem('gridai_user', JSON.stringify({
+        ...stored,
+        appliances:     applianceData.appliances,
+        peak_demand_kw: applianceData.peak_kw,
+        daily_kwh:      applianceData.daily_kwh,
+      }));
+      setApplianceSaved(true);
+      setTimeout(() => setApplianceSaved(false), 2000);
+    } catch {
+      // silent fail — user can retry
+    } finally {
+      setApplianceSaving(false);
+    }
   };
 
   const handleSignOut = () => {
@@ -122,6 +159,31 @@ export default function Settings({ selectedCountry, onCountryChange }) {
 
             <button onClick={handleSave} style={s.saveBtn}>
               {saved ? `✓ ${t('saved')}` : t('saveChanges')}
+            </button>
+          </section>
+
+          {/* Appliances card */}
+          <section style={s.card}>
+            <div style={s.cardHeader}>
+              <Zap size={15} color="var(--brown)" />
+              <span style={s.cardTitle}>Your Appliances</span>
+            </div>
+            <p style={s.cardDesc}>
+              Update your appliance list to get accurate load estimates and personalised battery sizing.
+            </p>
+            <ApplianceCalculator
+              buildingType={profile.building_type || 'residential'}
+              value={applianceData.appliances}
+              onChange={(appliances, peak_kw, daily_kwh) =>
+                setApplianceData({ appliances, peak_kw, daily_kwh })
+              }
+            />
+            <button
+              onClick={handleSaveAppliances}
+              disabled={applianceSaving}
+              style={{ ...s.saveBtn, marginTop: 14 }}
+            >
+              {applianceSaved ? '✓ Saved' : applianceSaving ? 'Saving…' : 'Save Appliances'}
             </button>
           </section>
 

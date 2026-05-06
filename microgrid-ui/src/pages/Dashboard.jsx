@@ -7,8 +7,9 @@ import OptimizationChart from '../components/OptimizationChart';
 import AnomalyPanel      from '../components/AnomalyPanel';
 import GridBackground    from '../components/GridBackground';
 import { detectUserCountry, COUNTRIES } from '../services/api';
+import { APPLIANCE_CATALOG } from '../components/ApplianceCalculator';
 import { useLanguage } from '../context/LanguageContext';
-import { Clock, Activity } from 'lucide-react';
+import { Clock, Activity, Zap } from 'lucide-react';
 
 // IANA timezone per country for correct local time display
 const COUNTRY_TZ = {
@@ -16,6 +17,74 @@ const COUNTRY_TZ = {
   australia: 'Australia/Sydney',
   germany:   'Europe/Berlin',
   canada:    'America/Toronto',
+};
+
+const RATE_NGN = 68;
+
+function EnergyProfileCard({ profile }) {
+  const catalog   = APPLIANCE_CATALOG[profile.building_type] ?? APPLIANCE_CATALOG.residential;
+  const savedQtys = Object.fromEntries((profile.appliances || []).map(a => [a.id, a.qty]));
+
+  // Top 2 appliances by daily kWh consumption
+  const ranked = catalog
+    .map(a => ({ ...a, qty: savedQtys[a.id] ?? 0 }))
+    .filter(a => a.qty > 0)
+    .sort((x, y) => (y.watts * y.qty * y.hours) - (x.watts * x.qty * x.hours))
+    .slice(0, 2);
+
+  const monthly_kwh = (profile.daily_kwh || 0) * 30;
+  const monthly_ngn = Math.round(monthly_kwh * RATE_NGN);
+  const intensity   = profile.peak_demand_kw < 3 ? '#10B981' : profile.peak_demand_kw < 10 ? '#F59E0B' : '#F43F5E';
+
+  return (
+    <div style={ep.card} className="fade-up fade-up-3">
+      <div style={ep.header}>
+        <Zap size={14} color="var(--brown)" />
+        <span style={ep.title}>Energy Profile</span>
+        <span style={ep.sub}>— based on your appliances</span>
+      </div>
+      <div style={ep.metrics}>
+        <div style={ep.metric}>
+          <span style={{ ...ep.metricVal, color: intensity }}>{(profile.peak_demand_kw || 0).toFixed(1)} kW</span>
+          <span style={ep.metricLabel}>Peak demand</span>
+        </div>
+        <div style={ep.divider} />
+        <div style={ep.metric}>
+          <span style={ep.metricVal}>{(profile.daily_kwh || 0).toFixed(1)} kWh</span>
+          <span style={ep.metricLabel}>Daily usage</span>
+        </div>
+        <div style={ep.divider} />
+        <div style={ep.metric}>
+          <span style={ep.metricVal}>~₦{monthly_ngn.toLocaleString()}</span>
+          <span style={ep.metricLabel}>Est. monthly bill</span>
+        </div>
+        {ranked.length > 0 && (
+          <>
+            <div style={ep.divider} />
+            <div style={ep.metric}>
+              <span style={ep.metricVal}>{ranked.map(a => `${a.icon} ×${a.qty}`).join('  ')}</span>
+              <span style={ep.metricLabel}>Top consumers</span>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const ep = {
+  card: {
+    background: 'var(--bg-card)', border: '1px solid var(--border)',
+    borderRadius: 14, padding: '14px 18px', boxShadow: 'var(--shadow-card)',
+  },
+  header: { display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12 },
+  title:  { fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-display)' },
+  sub:    { fontSize: 11, color: 'var(--text-muted)' },
+  metrics: { display: 'flex', alignItems: 'center', gap: 0, flexWrap: 'wrap' },
+  metric:  { display: 'flex', flexDirection: 'column', gap: 2, padding: '4px 20px 4px 0' },
+  metricVal:   { fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' },
+  metricLabel: { fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' },
+  divider: { width: 1, height: 32, background: 'rgba(255,255,255,0.07)', margin: '0 20px 0 0', flexShrink: 0 },
 };
 
 export default function Dashboard({ selectedCountry, onCountryChange }) {
@@ -113,7 +182,12 @@ export default function Dashboard({ selectedCountry, onCountryChange }) {
             </div>
           </div>
 
-          {/* Row 3: Anomaly full width */}
+          {/* Row 3: Energy Profile (only shown when appliances configured) */}
+          {profile.peak_demand_kw > 0 && (
+            <EnergyProfileCard profile={profile} />
+          )}
+
+          {/* Row 4: Anomaly full width */}
           <AnomalyPanel country={selectedCountry} />
 
         </div>

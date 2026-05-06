@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
+import AppleLogin from 'react-apple-login';
 import { useAuth } from '../context/AuthContext';
 import useIsMobile from '../hooks/useIsMobile';
 import GridBackground from '../components/GridBackground';
@@ -23,6 +24,13 @@ const MicrosoftIcon = () => (
   </svg>
 );
 
+const AppleIcon = () => (
+  <svg width="17" height="17" viewBox="0 0 18 18" fill="none">
+    <path d="M15.07 9.6c-.02-1.96 1.6-2.9 1.67-2.95-0.91-1.33-2.33-1.51-2.84-1.53-1.21-.12-2.36.71-2.97.71-.62 0-1.57-.69-2.58-.67-1.33.02-2.56.77-3.24 1.96-1.38 2.39-.35 5.93 1 7.88.66.96 1.45 2.04 2.48 2 .99-.04 1.37-.64 2.57-.64 1.2 0 1.54.64 2.58.62 1.07-.02 1.75-0.98 2.4-1.94.76-1.11 1.07-2.19 1.09-2.24-.02-.01-2.12-.82-2.14-3.2z" fill="currentColor"/>
+    <path d="M12.46 3.9c.55-.67.92-1.6.82-2.53-.79.03-1.75.53-2.32 1.19-.51.59-.95 1.54-.83 2.44.88.07 1.78-.45 2.33-1.1z" fill="currentColor"/>
+  </svg>
+);
+
 // Animated electric grid logo
 const GridIcon = () => (
   <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
@@ -42,7 +50,7 @@ const FEATURES = [
 ];
 
 export default function Login() {
-  const { signInWithGoogle, signInWithMicrosoft, loginWithEmail, registerWithEmail } = useAuth();
+  const { signInWithGoogle, signInWithMicrosoft, signInWithApple, loginWithEmail, registerWithEmail } = useAuth();
   const navigate  = useNavigate();
   const isMobile  = useIsMobile();
   const [loading,          setLoading]          = useState(null);
@@ -177,6 +185,42 @@ export default function Login() {
                 <MicrosoftIcon />
                 {loading === 'microsoft' ? 'Connecting…' : 'Continue with Microsoft'}
               </button>
+
+              {import.meta.env.VITE_APPLE_CLIENT_ID && (
+                <AppleLogin
+                  clientId={import.meta.env.VITE_APPLE_CLIENT_ID}
+                  redirectURI={window.location.origin}
+                  usePopup={true}
+                  scope="name email"
+                  responseMode="form_post"
+                  callback={async (res) => {
+                    if (res?.error) { setError('Apple sign-in was cancelled.'); return; }
+                    setLoading('apple');
+                    setError('');
+                    try {
+                      const result = await signInWithApple(
+                        res.authorization.id_token,
+                        res.user ?? null
+                      );
+                      navigate(result.isNewUser ? '/onboarding' : '/');
+                    } catch {
+                      setError('Apple sign-in failed. Please try again.');
+                    } finally {
+                      setLoading(null);
+                    }
+                  }}
+                  render={({ onClick }) => (
+                    <button
+                      style={{ ...s.oauthBtn, ...(loading === 'apple' ? s.btnDisabled : {}) }}
+                      onClick={onClick}
+                      disabled={!!loading}
+                    >
+                      <AppleIcon />
+                      {loading === 'apple' ? 'Connecting…' : 'Continue with Apple'}
+                    </button>
+                  )}
+                />
+              )}
 
               <div style={s.divider}>
                 <span style={s.divLine} />

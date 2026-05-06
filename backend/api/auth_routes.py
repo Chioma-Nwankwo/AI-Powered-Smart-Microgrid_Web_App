@@ -289,6 +289,40 @@ def microsoft_auth():
     })
 
 
+@auth_bp.route('/apple', methods=['POST'])
+def apple_auth():
+    """POST — accept Apple id_token from frontend popup flow."""
+    data      = request.get_json() or {}
+    id_token  = data.get('token')
+    user_info = data.get('user_info')   # name/email only present on first Apple login
+
+    if not id_token:
+        return jsonify({'error': 'No token provided'}), 400
+
+    try:
+        parts  = id_token.split('.')
+        if len(parts) < 2:
+            return jsonify({'error': 'Invalid token format'}), 400
+        padded  = parts[1] + '=' * (4 - len(parts[1]) % 4)
+        payload = json.loads(base64.b64decode(padded))
+
+        provider_id = payload.get('sub', '')
+        email       = payload.get('email') or (user_info or {}).get('email', '')
+        first       = ((user_info or {}).get('name') or {}).get('firstName', '')
+        last        = ((user_info or {}).get('name') or {}).get('lastName', '')
+        name        = f"{first} {last}".strip() or email
+
+        return _complete_oauth_login({
+            'provider':    'apple',
+            'provider_id': provider_id,
+            'email':       email,
+            'name':        name,
+        })
+    except Exception as e:
+        logger.error(f"Apple auth error: {e}")
+        return jsonify({'error': 'Apple authentication failed'}), 500
+
+
 @auth_bp.route('/microsoft/callback', methods=['GET'])
 def microsoft_callback():
     """Handle Microsoft OAuth callback"""

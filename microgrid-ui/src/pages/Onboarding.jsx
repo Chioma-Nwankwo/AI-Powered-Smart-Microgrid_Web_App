@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import GridBackground from '../components/GridBackground';
+import ApplianceCalculator from '../components/ApplianceCalculator';
 import { Zap, MapPin, Building2, ClipboardList, CheckCircle } from 'lucide-react';
 import { detectLocation, updateProfile } from '../services/api';
 import useIsMobile from '../hooks/useIsMobile';
@@ -50,6 +51,7 @@ const BUILDING_FIELDS = {
 const STEPS = [
   { label: 'Location',      icon: MapPin },
   { label: 'Building type', icon: Building2 },
+  { label: 'Appliances',    icon: Zap },
   { label: 'Details',       icon: ClipboardList },
 ];
 
@@ -101,6 +103,7 @@ export default function Onboarding({ onComplete }) {
   const [state,   setState]   = useState('');
   const [btype,   setBtype]   = useState('');
   const [details, setDetails] = useState({});
+  const [applianceData, setApplianceData] = useState({ appliances: [], peak_kw: 0, daily_kwh: 0 });
   const [saving,     setSaving]     = useState(false);
   const [error,      setError]      = useState('');
   const [detecting,  setDetecting]  = useState(false);
@@ -161,13 +164,21 @@ export default function Onboarding({ onComplete }) {
         .map(([k, v]) => `${k}: ${v}`)
         .join(', ') || 'completed';
 
-      await updateProfile({ country, state, building_type: btype, address });
+      await updateProfile({
+        country, state, building_type: btype, address,
+        appliances:     applianceData.appliances,
+        peak_demand_kw: applianceData.peak_kw,
+        daily_kwh:      applianceData.daily_kwh,
+      });
 
       // Look up state-level coordinates for map navigation
       const coords = STATE_COORDS[country]?.[state] ?? null;
       const stored = JSON.parse(localStorage.getItem('gridai_user') || '{}');
       localStorage.setItem('gridai_user', JSON.stringify({
         ...stored, country, state, building_type: btype, address,
+        appliances:     applianceData.appliances,
+        peak_demand_kw: applianceData.peak_kw,
+        daily_kwh:      applianceData.daily_kwh,
         userLng: coords ? coords[0] : stored.userLng,
         userLat: coords ? coords[1] : stored.userLat,
       }));
@@ -219,9 +230,9 @@ export default function Onboarding({ onComplete }) {
         <div style={s.signalBar}>
           <span style={s.signalLabel}>GRID SIGNAL</span>
           <div style={s.signalTrack}>
-            <div style={{ ...s.signalFill, width: `${[33, 55, 80][step]}%` }} />
+            <div style={{ ...s.signalFill, width: `${[25, 50, 75, 100][step] ?? 100}%` }} />
           </div>
-          <span style={s.signalPct}>{[33, 55, 100][step]}%</span>
+          <span style={s.signalPct}>{[25, 50, 75, 100][step] ?? 100}%</span>
         </div>
       </div>
 
@@ -355,8 +366,29 @@ export default function Onboarding({ onComplete }) {
             </div>
           )}
 
-          {/* Step 2: Building details */}
+          {/* Step 2: Appliances */}
           {step === 2 && (
+            <div>
+              <h2 style={s.stepTitle}>What appliances do you have?</h2>
+              <p style={s.stepDesc}>Set how many of each appliance your building uses — GridAI calculates your load profile automatically.</p>
+              <ApplianceCalculator
+                buildingType={btype}
+                value={applianceData.appliances}
+                onChange={(appliances, peak_kw, daily_kwh) =>
+                  setApplianceData({ appliances, peak_kw, daily_kwh })
+                }
+              />
+              <div style={s.navRow}>
+                <button onClick={() => setStep(1)} style={s.backBtn}>← Back</button>
+                <button onClick={() => setStep(3)} style={s.nextBtn}>
+                  Continue →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Building details */}
+          {step === 3 && (
             <div>
               <h2 style={s.stepTitle}>Building details</h2>
               <p style={s.stepDesc}>Fill in what you can — all fields are optional.</p>
@@ -376,7 +408,7 @@ export default function Onboarding({ onComplete }) {
               </div>
               {error && <p style={s.error}>{error}</p>}
               <div style={s.navRow}>
-                <button onClick={() => setStep(1)} style={s.backBtn}>← Back</button>
+                <button onClick={() => setStep(2)} style={s.backBtn}>← Back</button>
                 <button onClick={handleSave} disabled={saving}
                   style={{ ...s.nextBtn, ...(saving ? s.btnDisabled : {}) }}>
                   {saving ? 'Connecting…' : 'Connect to Grid →'}

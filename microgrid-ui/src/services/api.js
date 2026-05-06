@@ -38,6 +38,7 @@ flaskApi.interceptors.response.use(
 // Auth
 export const loginWithGoogle       = token            => flaskApi.post('/api/auth/google',    { token });
 export const loginWithMicrosoft    = token            => flaskApi.post('/api/auth/microsoft', { token });
+export const loginWithApple        = (token, userInfo) => flaskApi.post('/api/auth/apple',   { token, user_info: userInfo });
 export const loginWithEmailPassword = (email, password) => flaskApi.post('/api/auth/login',   { email, password });
 export const registerWithEmailPassword = (email, password) => flaskApi.post('/api/auth/signup', {
   email, password,

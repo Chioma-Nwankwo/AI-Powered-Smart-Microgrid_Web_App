@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { loginWithGoogle, loginWithMicrosoft, loginWithEmailPassword, registerWithEmailPassword } from '../services/api';
+import { loginWithGoogle, loginWithMicrosoft, loginWithApple, loginWithEmailPassword, registerWithEmailPassword } from '../services/api';
 import { msalInstance, loginRequest } from '../services/msalConfig';
 
 const AuthContext = createContext(null);
@@ -77,6 +77,13 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  // ── Apple ───────────────────────────────────────────────────────
+  const signInWithApple = useCallback(async (idToken, userInfo) => {
+    const { data } = await loginWithApple(idToken, userInfo);
+    saveSession(data.user, data.access_token);
+    return { success: true, isNewUser: !!data.is_new_user };
+  }, []);
+
   // ── Email / password ────────────────────────────────────────────
   const loginWithEmail = useCallback(async (email, password) => {
     const { data } = await loginWithEmailPassword(email, password);
@@ -98,7 +105,7 @@ export function AuthProvider({ children }) {
   }, [_signOut]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogle, signInWithMicrosoft, loginWithEmail, registerWithEmail, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signInWithGoogle, signInWithMicrosoft, signInWithApple, loginWithEmail, registerWithEmail, signOut }}>
       {children}
     </AuthContext.Provider>
   );

@@ -19,7 +19,13 @@ export default function OptimizePage({ selectedCountry, onCountryChange }) {
   const { label, flag } = COUNTRIES[selectedCountry];
   const profile = (() => { try { return JSON.parse(localStorage.getItem('gridai_user') || '{}'); } catch { return {}; } })();
   const btype   = profile.building_type?.toLowerCase() || 'commercial';
-  const caps    = BUILDING_CAPACITY[btype] || BUILDING_CAPACITY.commercial;
+  // Use user's measured load if they've completed appliance setup; fall back to building-type defaults
+  const caps = (profile.peak_demand_kw && profile.daily_kwh)
+    ? {
+        battery_kwh: Math.max(5,  Math.ceil(profile.daily_kwh      * 0.5)),
+        panel_kw:    Math.max(2,  Math.ceil(profile.peak_demand_kw  * 1.2)),
+      }
+    : BUILDING_CAPACITY[btype] ?? BUILDING_CAPACITY.commercial;
 
   return (
     <div style={s.shell}>
