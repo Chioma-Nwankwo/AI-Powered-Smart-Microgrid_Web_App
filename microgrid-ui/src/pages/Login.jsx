@@ -50,7 +50,7 @@ const FEATURES = [
 ];
 
 export default function Login() {
-  const { signInWithGoogle, signInWithMicrosoft, signInWithApple, loginWithEmail, registerWithEmail } = useAuth();
+  const { signInWithGoogle, signInWithMicrosoft, signInWithApple, loginWithEmail, registerWithEmail, serverReady } = useAuth();
   const navigate  = useNavigate();
   const isMobile  = useIsMobile();
   const [loading,          setLoading]          = useState(null);
@@ -146,6 +146,13 @@ export default function Login() {
       {/* Right panel — auth form */}
       <div style={{ ...s.rightPanel, width: isMobile ? '100%' : 480, padding: isMobile ? 20 : 40 }}>
         <div style={{ ...s.card, padding: isMobile ? '28px 20px 22px' : '36px 36px 28px' }} className="fade-up">
+          {!serverReady && (
+            <div style={s.wakeupBanner}>
+              <span style={s.wakeupDot} />
+              Server is starting up, please wait a moment…
+            </div>
+          )}
+
           <div style={s.cardHeader}>
             <h1 style={s.title}>{isSignUp && showEmailForm ? 'Create account' : 'Sign in'}</h1>
             <p style={s.subtitle}>{isSignUp && showEmailForm ? 'Join GridAI — complete setup after sign-up' : 'Access your microgrid dashboard'}</p>
@@ -428,6 +435,17 @@ const s = {
     textAlign: 'right', padding: '4px 0', opacity: 0.85,
   },
   btnDisabled: { opacity: 0.50, cursor: 'not-allowed' },
+  wakeupBanner: {
+    display: 'flex', alignItems: 'center', gap: 8,
+    padding: '8px 12px', borderRadius: 8, marginBottom: 16,
+    background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.18)',
+    fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)',
+    letterSpacing: '0.04em',
+  },
+  wakeupDot: {
+    width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
+    background: '#F59E0B', animation: 'pulse 1.2s ease-in-out infinite',
+  },
   errorBox: {
     marginTop: 14, padding: '10px 14px', borderRadius: 8,
     background: 'rgba(255,77,109,0.08)', border: '1px solid rgba(255,77,109,0.20)',

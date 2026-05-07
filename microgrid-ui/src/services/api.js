@@ -35,6 +35,9 @@ flaskApi.interceptors.response.use(
   }
 );
 
+// Server wake-up ping (Render free-tier cold-start fix)
+export const pingServer = () => flaskApi.get('/api/health').catch(() => {});
+
 // Auth
 export const loginWithGoogle       = token            => flaskApi.post('/api/auth/google',    { token });
 export const loginWithMicrosoft    = token            => flaskApi.post('/api/auth/microsoft', { token });

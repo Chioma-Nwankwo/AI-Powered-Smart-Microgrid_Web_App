@@ -1,12 +1,18 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { loginWithGoogle, loginWithMicrosoft, loginWithApple, loginWithEmailPassword, registerWithEmailPassword } from '../services/api';
+import { loginWithGoogle, loginWithMicrosoft, loginWithApple, loginWithEmailPassword, registerWithEmailPassword, pingServer } from '../services/api';
 import { msalInstance, loginRequest } from '../services/msalConfig';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser]       = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser]             = useState(null);
+  const [loading, setLoading]       = useState(true);
+  const [serverReady, setServerReady] = useState(false);
+
+  // Pre-warm Render server on mount so it's awake before the user clicks login
+  useEffect(() => {
+    pingServer().finally(() => setServerReady(true));
+  }, []);
 
   // Restore session on mount
   useEffect(() => {
@@ -105,7 +111,7 @@ export function AuthProvider({ children }) {
   }, [_signOut]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogle, signInWithMicrosoft, signInWithApple, loginWithEmail, registerWithEmail, signOut }}>
+    <AuthContext.Provider value={{ user, loading, serverReady, signInWithGoogle, signInWithMicrosoft, signInWithApple, loginWithEmail, registerWithEmail, signOut }}>
       {children}
     </AuthContext.Provider>
   );
