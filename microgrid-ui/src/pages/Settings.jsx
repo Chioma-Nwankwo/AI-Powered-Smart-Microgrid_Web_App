@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth }     from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { TRANSLATIONS, LANGUAGE_NAMES } from '../i18n/translations';
-import { Settings as SettingsIcon, User, Globe, Sliders, LogOut, Edit2, Zap } from 'lucide-react';
+import { Settings as SettingsIcon, User, Globe, Sliders, LogOut, Edit2, Zap, Sun, Moon } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import ApplianceCalculator from '../components/ApplianceCalculator';
 import { updateProfile } from '../services/api';
@@ -15,6 +15,14 @@ export default function Settings({ selectedCountry, onCountryChange }) {
   const navigate   = useNavigate();
   const [saved, setSaved]             = useState(false);
   const [units, setUnits]             = useState(localStorage.getItem('gridai_units') || 'metric');
+  const [theme, setTheme]             = useState(localStorage.getItem('gridai_theme') || 'dark');
+
+  const toggleTheme = () => {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    localStorage.setItem('gridai_theme', next);
+    document.documentElement.setAttribute('data-theme', next);
+  };
   const [applianceSaved, setApplianceSaved] = useState(false);
   const [applianceSaving, setApplianceSaving] = useState(false);
 
@@ -157,6 +165,16 @@ export default function Settings({ selectedCountry, onCountryChange }) {
               </div>
             </div>
 
+            <div style={s.prefRow}>
+              <label style={s.prefLabel}>Appearance</label>
+              <button onClick={toggleTheme} style={s.themeBtn}>
+                {theme === 'dark'
+                  ? <><Sun size={13} /> Light mode</>
+                  : <><Moon size={13} /> Dark mode</>
+                }
+              </button>
+            </div>
+
             <button onClick={handleSave} style={s.saveBtn}>
               {saved ? `✓ ${t('saved')}` : t('saveChanges')}
             </button>
@@ -174,6 +192,7 @@ export default function Settings({ selectedCountry, onCountryChange }) {
             <ApplianceCalculator
               buildingType={profile.building_type || 'residential'}
               value={applianceData.appliances}
+              country={selectedCountry}
               onChange={(appliances, peak_kw, daily_kwh) =>
                 setApplianceData({ appliances, peak_kw, daily_kwh })
               }
@@ -252,6 +271,13 @@ const s = {
   radioGroup: { display: 'flex', gap: 16 },
   radioLabel: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' },
 
+  themeBtn: {
+    display: 'flex', alignItems: 'center', gap: 6,
+    padding: '7px 14px', borderRadius: 8,
+    border: '1px solid var(--border)', background: 'var(--bg-elevated)',
+    color: 'var(--text-secondary)', fontFamily: 'var(--font-body)',
+    fontSize: 12, fontWeight: 500, cursor: 'pointer', transition: 'all 0.15s',
+  },
   saveBtn: {
     padding: '10px 20px', borderRadius: 9, border: 'none',
     background: 'var(--brown)', color: '#fff',

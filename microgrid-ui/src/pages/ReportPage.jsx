@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import { getForecast, getOptimization, getAnomalies, COUNTRIES } from '../services/api';
-import { APPLIANCE_CATALOG } from '../components/ApplianceCalculator';
+import { APPLIANCE_CATALOG, CURRENCY } from '../components/ApplianceCalculator';
 import { Printer, ArrowLeft } from 'lucide-react';
 
 const BUILDING_CAPACITY = {
@@ -12,8 +12,6 @@ const BUILDING_CAPACITY = {
   school:      { battery_kwh: 50,  panel_kw: 30  },
   hospital:    { battery_kwh: 200, panel_kw: 100 },
 };
-
-const RATE_NGN = 68;
 
 // Summarise forecast rows into stats for a given key prefix
 function forecastStats(rows, prefix) {
@@ -27,9 +25,10 @@ export default function ReportPage({ selectedCountry, onCountryChange }) {
   const navigate  = useNavigate();
   const printRef  = useRef();
   const profile   = (() => { try { return JSON.parse(localStorage.getItem('gridai_user') || '{}'); } catch { return {}; } })();
-  const country   = (profile.country || 'nigeria').toLowerCase();
-  const btype     = profile.building_type || 'residential';
+  const country     = (profile.country || 'nigeria').toLowerCase();
+  const btype       = profile.building_type || 'residential';
   const countryMeta = COUNTRIES[country] ?? COUNTRIES.nigeria;
+  const curr        = CURRENCY[country] ?? CURRENCY.nigeria;
 
   const [forecast,     setForecast]     = useState(null);
   const [optimization, setOptimization] = useState(null);
@@ -69,10 +68,10 @@ export default function ReportPage({ selectedCountry, onCountryChange }) {
   const avgDemand     = demandVals.length ? (demandVals.reduce((a, b) => a + b, 0) / demandVals.length).toFixed(1) : '—';
   const anomalyCount  = anomalies?.anomalies?.length ?? 0;
 
-  const catalog   = APPLIANCE_CATALOG[btype] ?? APPLIANCE_CATALOG.residential;
-  const savedQtys = Object.fromEntries((profile.appliances || []).map(a => [a.id, a.qty]));
-  const activeAppliances = catalog.filter(a => (savedQtys[a.id] ?? 0) > 0)
-    .map(a => ({ ...a, qty: savedQtys[a.id] }));
+  const catalog     = APPLIANCE_CATALOG[btype] ?? APPLIANCE_CATALOG.residential;
+  const savedMap    = Object.fromEntries((profile.appliances || []).map(a => [a.id, a]));
+  const activeAppliances = catalog.filter(a => (savedMap[a.id]?.qty ?? 0) > 0)
+    .map(a => ({ ...a, qty: savedMap[a.id].qty, hours: savedMap[a.id].hours ?? a.hours, brand: savedMap[a.id].brand || '' }));
 
   const optSummary = optimization?.schedule ?? optimization?.summary ?? null;
   const solarGen    = optimization?.total_solar_generation ?? optimization?.solar_generated ?? null;
@@ -84,14 +83,19 @@ export default function ReportPage({ selectedCountry, onCountryChange }) {
       {/* Print-specific global styles injected inline */}
       <style>{`
         @media print {
+          @page { size: A4; margin: 15mm 12mm; }
           .no-print { display: none !important; }
           .print-area { box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 !important; }
-          body { background: #fff !important; color: #000 !important; }
-          .report-card { break-inside: avoid; border: 1px solid #ddd !important; background: #fafafa !important; }
-          .report-val { color: #1a1a2e !important; }
+          body { background: #fff !important; color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .report-card { break-inside: avoid; page-break-inside: avoid; border: 1px solid #ddd !important; background: #fafafa !important; margin-bottom: 12px !important; }
+          .report-stat-row { break-inside: avoid; page-break-inside: avoid; }
+          .report-table { break-inside: avoid; page-break-inside: avoid; }
+          .report-val   { color: #1a1a2e !important; }
           .report-label { color: #555 !important; }
-          .report-title { color: #1a1a2e !important; }
+          .report-title { color: #1a1a2e !important; page-break-after: avoid; }
           .report-meta  { color: #555 !important; }
+          table { width: 100%; border-collapse: collapse; font-size: 10px; }
+          th, td { padding: 4px 8px; border: 1px solid #ddd; }
         }
       `}</style>
 
@@ -141,11 +145,11 @@ export default function ReportPage({ selectedCountry, onCountryChange }) {
           {/* Section 2: Energy Consumption Profile */}
           {profile.peak_demand_kw > 0 && (
             <Section title="2. Energy Consumption Profile">
-              <div style={s.statRow}>
+              <div style={s.statRow} className="report-stat-row">
                 <StatBox label="Peak Demand"   value={`${profile.peak_demand_kw.toFixed(1)} kW`} />
                 <StatBox label="Daily Usage"   value={`${(profile.daily_kwh || 0).toFixed(1)} kWh`} />
                 <StatBox label="Monthly Usage" value={`${((profile.daily_kwh || 0) * 30).toFixed(0)} kWh`} />
-                <StatBox label="Est. Monthly Bill" value={`₦${Math.round((profile.daily_kwh || 0) * 30 * RATE_NGN).toLocaleString()}`} />
+                <StatBox label="Est. Monthly Bill" value={`${curr.symbol}${curr.rate >= 1 ? Math.round((profile.daily_kwh || 0) * 30 * curr.rate).toLocaleString() : ((profile.daily_kwh || 0) * 30 * curr.rate).toFixed(2)}`} />
               </div>
               {activeAppliances.length > 0 && (
                 <div style={{ marginTop: 14 }}>
@@ -153,7 +157,7 @@ export default function ReportPage({ selectedCountry, onCountryChange }) {
                   <table style={s.table}>
                     <thead>
                       <tr>
-                        {['Appliance', 'Rating', 'Qty', 'Daily Use', 'Daily kWh'].map(h => (
+                        {['Appliance', 'Brand', 'Rating', 'Qty', 'Daily Use', 'Daily kWh'].map(h => (
                           <th key={h} style={s.th}>{h}</th>
                         ))}
                       </tr>
@@ -162,6 +166,7 @@ export default function ReportPage({ selectedCountry, onCountryChange }) {
                       {activeAppliances.map(a => (
                         <tr key={a.id}>
                           <td style={s.td}>{a.icon} {a.label}</td>
+                          <td style={s.td}>{a.brand || '—'}</td>
                           <td style={s.td}>{a.watts >= 1000 ? `${a.watts/1000} kW` : `${a.watts} W`}</td>
                           <td style={s.td}>{a.qty}</td>
                           <td style={s.td}>{a.hours}h</td>
@@ -182,7 +187,7 @@ export default function ReportPage({ selectedCountry, onCountryChange }) {
               : solar
               ? (
                 <>
-                  <div style={s.statRow}>
+                  <div style={s.statRow} className="report-stat-row">
                     <StatBox label="Avg Solar Irradiance" value={`${solar.avg} W/m²`}    sub={`Peak ${solar.max} W/m²`} />
                     <StatBox label="Avg Wind Speed"       value={`${wind?.avg ?? '—'} m/s`} sub={wind ? `Peak ${wind.max} m/s` : ''} />
                     <StatBox label="Avg Grid Demand"      value={`${avgDemand} MW`}       sub="Country-level estimate" />
@@ -205,14 +210,14 @@ export default function ReportPage({ selectedCountry, onCountryChange }) {
               ? <p style={s.loading}>Fetching optimisation data…</p>
               : (
                 <>
-                  <div style={s.statRow}>
+                  <div style={s.statRow} className="report-stat-row">
                     <StatBox label="Battery Capacity"  value={`${caps.battery_kwh} kWh`}
                              sub={profile.peak_demand_kw ? 'Based on your load' : 'Building-type default'} />
                     <StatBox label="Solar Array"       value={`${caps.panel_kw} kW`}
                              sub={profile.peak_demand_kw ? 'Based on your load' : 'Building-type default'} />
                     {solarGen  != null && <StatBox label="Solar Generated"  value={`${Number(solarGen).toFixed(1)} kWh`}  sub="Over 24h" />}
                     {gridImport != null && <StatBox label="Grid Import"     value={`${Number(gridImport).toFixed(1)} kWh`} sub="Over 24h" />}
-                    {costSaving != null && <StatBox label="Cost Saving"     value={`₦${Number(costSaving).toFixed(0)}`}   sub="Over 24h" />}
+                    {costSaving != null && <StatBox label="Cost Saving" value={`${curr.symbol}${curr.rate >= 1 ? Math.round(Number(costSaving)).toLocaleString() : Number(costSaving).toFixed(2)}`} sub="Over 24h" />}
                   </div>
                   <p style={s.noteText}>
                     Optimisation uses a Linear Programming (LP) model with battery SOC constraints,
@@ -229,7 +234,7 @@ export default function ReportPage({ selectedCountry, onCountryChange }) {
               ? <p style={s.loading}>Fetching anomaly data…</p>
               : (
                 <>
-                  <div style={s.statRow}>
+                  <div style={s.statRow} className="report-stat-row">
                     <StatBox
                       label="Anomalies (48h)"
                       value={String(anomalyCount)}

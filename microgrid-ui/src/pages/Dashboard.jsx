@@ -7,7 +7,7 @@ import OptimizationChart from '../components/OptimizationChart';
 import AnomalyPanel      from '../components/AnomalyPanel';
 import GridBackground    from '../components/GridBackground';
 import { detectUserCountry, COUNTRIES } from '../services/api';
-import { APPLIANCE_CATALOG } from '../components/ApplianceCalculator';
+import { APPLIANCE_CATALOG, CURRENCY } from '../components/ApplianceCalculator';
 import { useLanguage } from '../context/LanguageContext';
 import { Clock, Activity, Zap } from 'lucide-react';
 
@@ -19,22 +19,23 @@ const COUNTRY_TZ = {
   canada:    'America/Toronto',
 };
 
-const RATE_NGN = 68;
-
-function EnergyProfileCard({ profile }) {
+function EnergyProfileCard({ profile, country }) {
   const catalog   = APPLIANCE_CATALOG[profile.building_type] ?? APPLIANCE_CATALOG.residential;
   const savedQtys = Object.fromEntries((profile.appliances || []).map(a => [a.id, a.qty]));
+  const curr      = CURRENCY[(country || 'nigeria').toLowerCase()] ?? CURRENCY.nigeria;
 
-  // Top 2 appliances by daily kWh consumption
   const ranked = catalog
     .map(a => ({ ...a, qty: savedQtys[a.id] ?? 0 }))
     .filter(a => a.qty > 0)
     .sort((x, y) => (y.watts * y.qty * y.hours) - (x.watts * x.qty * x.hours))
     .slice(0, 2);
 
-  const monthly_kwh = (profile.daily_kwh || 0) * 30;
-  const monthly_ngn = Math.round(monthly_kwh * RATE_NGN);
-  const intensity   = profile.peak_demand_kw < 3 ? '#10B981' : profile.peak_demand_kw < 10 ? '#F59E0B' : '#F43F5E';
+  const monthly_kwh  = (profile.daily_kwh || 0) * 30;
+  const monthlyCost  = monthly_kwh * curr.rate;
+  const costStr      = curr.rate >= 1
+    ? `~${curr.symbol}${Math.round(monthlyCost).toLocaleString()}`
+    : `~${curr.symbol}${monthlyCost.toFixed(2)}`;
+  const intensity    = profile.peak_demand_kw < 3 ? '#10B981' : profile.peak_demand_kw < 10 ? '#F59E0B' : '#F43F5E';
 
   return (
     <div style={ep.card} className="fade-up fade-up-3">
@@ -55,7 +56,7 @@ function EnergyProfileCard({ profile }) {
         </div>
         <div style={ep.divider} />
         <div style={ep.metric}>
-          <span style={ep.metricVal}>~₦{monthly_ngn.toLocaleString()}</span>
+          <span style={ep.metricVal}>{costStr}</span>
           <span style={ep.metricLabel}>Est. monthly bill</span>
         </div>
         {ranked.length > 0 && (
@@ -184,7 +185,7 @@ export default function Dashboard({ selectedCountry, onCountryChange }) {
 
           {/* Row 3: Energy Profile (only shown when appliances configured) */}
           {profile.peak_demand_kw > 0 && (
-            <EnergyProfileCard profile={profile} />
+            <EnergyProfileCard profile={profile} country={selectedCountry} />
           )}
 
           {/* Row 4: Anomaly full width */}
