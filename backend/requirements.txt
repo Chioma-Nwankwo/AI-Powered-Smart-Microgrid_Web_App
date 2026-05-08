@@ -18,12 +18,12 @@ cryptography>=42.0.0
 pymongo>=4.6.0
 psycopg2-binary>=2.9.9
 
-# ML / Data
-numpy>=1.26.0
-pandas>=2.1.0
-scikit-learn>=1.3.0
-xgboost>=2.0.0
-joblib>=1.3.0
+# ML / Data — pinned to match trained model versions and avoid GPU deps
+numpy==1.26.4
+pandas==2.2.2
+scikit-learn==1.4.2
+xgboost==2.0.3
+joblib==1.3.2
 
 # Optimisation
 pulp>=2.7.0
