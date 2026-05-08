@@ -54,7 +54,7 @@ def update_profile():
         data = request.get_json()
 
         allowed = ['country', 'state', 'building_type', 'address',
-                   'electricity_rate', 'peak_demand_kw', 'daily_kwh', 'appliances']
+                   'electricity_rate', 'peak_demand_kw', 'daily_kwh', 'appliances', 'nigeria_band']
         update_data = {k: v for k, v in data.items() if k in allowed and v is not None}
 
         if not update_data:

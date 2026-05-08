@@ -40,8 +40,17 @@ export const APPLIANCE_CATALOG = {
   ],
 };
 
+// Nigeria NERC 2024 tariff bands — rate per kWh in NGN
+export const NIGERIA_BANDS = {
+  A: { label: 'Band A', hours: '20+ h/day', rate: 225 },
+  B: { label: 'Band B', hours: '16–20 h/day', rate: 63 },
+  C: { label: 'Band C', hours: '12–16 h/day', rate: 50 },
+  D: { label: 'Band D', hours: '8–12 h/day',  rate: 43 },
+  E: { label: 'Band E', hours: '<8 h/day',     rate: 40 },
+};
+
 export const CURRENCY = {
-  nigeria:   { symbol: '₦',  rate: 68   },
+  nigeria:   { symbol: '₦',  rate: 63   },  // default Band B
   australia: { symbol: 'A$', rate: 0.28 },
   germany:   { symbol: '€',  rate: 0.30 },
   canada:    { symbol: 'C$', rate: 0.13 },
@@ -58,12 +67,17 @@ function calcTotals(items) {
  * Props:
  *   buildingType — 'residential' | 'commercial' | 'industrial' | 'school' | 'hospital'
  *   value        — [{ id, qty, hours?, brand? }]
- *   onChange     — (appliances, peak_kw, daily_kwh) => void
+ *   onChange     — (appliances, peak_kw, daily_kwh, band?) => void
  *   country      — 'nigeria' | 'australia' | 'germany' | 'canada'
+ *   band         — 'A'|'B'|'C'|'D'|'E' (Nigeria only, default 'B')
  */
-export default function ApplianceCalculator({ buildingType = 'residential', value = [], onChange, country = 'nigeria' }) {
-  const catalog = APPLIANCE_CATALOG[buildingType] ?? APPLIANCE_CATALOG.residential;
-  const curr    = CURRENCY[(country || 'nigeria').toLowerCase()] ?? CURRENCY.nigeria;
+export default function ApplianceCalculator({ buildingType = 'residential', value = [], onChange, country = 'nigeria', band: bandProp = 'B' }) {
+  const catalog    = APPLIANCE_CATALOG[buildingType] ?? APPLIANCE_CATALOG.residential;
+  const isNigeria  = (country || '').toLowerCase() === 'nigeria';
+  const [band, setBand] = useState(bandProp);
+  const curr = isNigeria
+    ? { symbol: '₦', rate: NIGERIA_BANDS[band]?.rate ?? 63 }
+    : (CURRENCY[(country || 'nigeria').toLowerCase()] ?? CURRENCY.nigeria);
 
   const initQtys = () => {
     const saved = Object.fromEntries((value || []).map(a => [a.id, a.qty]));
@@ -86,7 +100,7 @@ export default function ApplianceCalculator({ buildingType = 'residential', valu
     setBrands(initBrands());
   }, [buildingType]);
 
-  const fire = (nq, nh, nb) => {
+  const fire = (nq, nh, nb, bd = band) => {
     const nextItems = catalog.map(a => ({ ...a, qty: nq[a.id] ?? 0, hours: nh[a.id] ?? a.hours }));
     const totals    = calcTotals(nextItems);
     onChange?.(
@@ -95,7 +109,13 @@ export default function ApplianceCalculator({ buildingType = 'residential', valu
       })),
       totals.peak_kw,
       totals.daily_kwh,
+      bd,
     );
+  };
+
+  const handleBandChange = (b) => {
+    setBand(b);
+    fire(qtys, hours, brands, b);
   };
 
   const setQty = (id, val) => {
@@ -171,6 +191,20 @@ export default function ApplianceCalculator({ buildingType = 'residential', valu
         })}
       </div>
 
+      {isNigeria && (
+        <div style={s.bandRow}>
+          <span style={s.bandLbl}>Your NERC tariff band:</span>
+          {Object.entries(NIGERIA_BANDS).map(([key, b]) => (
+            <button key={key} onClick={() => handleBandChange(key)}
+              style={{ ...s.bandPill, ...(band === key ? s.bandPillActive : {}) }}>
+              {key}
+              <span style={s.bandSub}>{b.hours}</span>
+            </button>
+          ))}
+          <span style={s.bandRate}>₦{NIGERIA_BANDS[band].rate}/kWh</span>
+        </div>
+      )}
+
       <div style={s.summary}>
         <Zap size={13} color={barColor} />
         <span style={{ color: barColor, fontWeight: 600 }}>Peak {peak_kw.toFixed(1)} kW</span>
@@ -224,6 +258,25 @@ const s = {
     background: 'rgba(245,158,11,0.03)', color: 'var(--text-secondary)',
     fontFamily: 'var(--font-body)', fontSize: 11, outline: 'none',
   },
+
+  bandRow: {
+    display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
+    padding: '6px 2px',
+  },
+  bandLbl: { fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', marginRight: 4 },
+  bandPill: {
+    display: 'flex', flexDirection: 'column', alignItems: 'center',
+    padding: '4px 10px', borderRadius: 8,
+    border: '1px solid rgba(245,158,11,0.15)', background: 'transparent',
+    color: 'var(--text-muted)', cursor: 'pointer', transition: 'all 0.12s',
+    fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600,
+  },
+  bandPillActive: {
+    background: 'rgba(245,158,11,0.12)', color: 'var(--primary)',
+    borderColor: 'rgba(245,158,11,0.40)',
+  },
+  bandSub: { fontSize: 8, fontWeight: 400, color: 'var(--text-muted)', marginTop: 1 },
+  bandRate: { marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--primary)', fontWeight: 600 },
 
   summary: {
     display: 'flex', alignItems: 'center', gap: 8,

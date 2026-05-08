@@ -33,6 +33,7 @@ export default function Settings({ selectedCountry, onCountryChange }) {
     appliances: profile.appliances || [],
     peak_kw:    profile.peak_demand_kw || 0,
     daily_kwh:  profile.daily_kwh || 0,
+    band:       profile.nigeria_band || 'B',
   });
 
   const handleSave = () => {
@@ -48,6 +49,7 @@ export default function Settings({ selectedCountry, onCountryChange }) {
         appliances:     applianceData.appliances,
         peak_demand_kw: applianceData.peak_kw,
         daily_kwh:      applianceData.daily_kwh,
+        nigeria_band:   applianceData.band,
       });
       const stored = JSON.parse(localStorage.getItem('gridai_user') || '{}');
       localStorage.setItem('gridai_user', JSON.stringify({
@@ -55,6 +57,7 @@ export default function Settings({ selectedCountry, onCountryChange }) {
         appliances:     applianceData.appliances,
         peak_demand_kw: applianceData.peak_kw,
         daily_kwh:      applianceData.daily_kwh,
+        nigeria_band:   applianceData.band,
       }));
       setApplianceSaved(true);
       setTimeout(() => setApplianceSaved(false), 2000);
@@ -193,8 +196,9 @@ export default function Settings({ selectedCountry, onCountryChange }) {
               buildingType={profile.building_type || 'residential'}
               value={applianceData.appliances}
               country={selectedCountry}
-              onChange={(appliances, peak_kw, daily_kwh) =>
-                setApplianceData({ appliances, peak_kw, daily_kwh })
+              band={applianceData.band}
+              onChange={(appliances, peak_kw, daily_kwh, band) =>
+                setApplianceData({ appliances, peak_kw, daily_kwh, band: band ?? applianceData.band })
               }
             />
             <button
