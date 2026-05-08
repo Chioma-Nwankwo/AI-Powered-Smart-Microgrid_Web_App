@@ -196,7 +196,7 @@ export default function Login() {
               {import.meta.env.VITE_APPLE_CLIENT_ID && (
                 <AppleLogin
                   clientId={import.meta.env.VITE_APPLE_CLIENT_ID}
-                  redirectURI={window.location.origin}
+                  redirectURI={import.meta.env.VITE_APP_URL || window.location.origin}
                   usePopup={true}
                   scope="name email"
                   responseMode="form_post"

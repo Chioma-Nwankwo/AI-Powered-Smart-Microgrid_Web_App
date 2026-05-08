@@ -2,7 +2,7 @@ import { PublicClientApplication } from '@azure/msal-browser';
 
 // Allowed redirect URIs — must ALL be registered in Azure AD portal under:
 // App registrations → your app → Authentication → Single-page application → Redirect URIs
-const REDIRECT_URI = window.location.origin;   // e.g. http://localhost:5173
+const REDIRECT_URI = import.meta.env.VITE_APP_URL || window.location.origin;
 
 export const msalConfig = {
   auth: {

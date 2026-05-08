@@ -27,7 +27,7 @@ export default function ReportPage({ selectedCountry, onCountryChange }) {
   const navigate  = useNavigate();
   const printRef  = useRef();
   const profile   = (() => { try { return JSON.parse(localStorage.getItem('gridai_user') || '{}'); } catch { return {}; } })();
-  const country   = selectedCountry || profile.country || 'nigeria';
+  const country   = (profile.country || 'nigeria').toLowerCase();
   const btype     = profile.building_type || 'residential';
   const countryMeta = COUNTRIES[country] ?? COUNTRIES.nigeria;
 
