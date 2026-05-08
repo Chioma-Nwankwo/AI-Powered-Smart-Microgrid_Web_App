@@ -103,7 +103,7 @@ export default function Onboarding({ onComplete }) {
   const [state,   setState]   = useState('');
   const [btype,   setBtype]   = useState('');
   const [details, setDetails] = useState({});
-  const [applianceData, setApplianceData] = useState({ appliances: [], peak_kw: 0, daily_kwh: 0 });
+  const [applianceData, setApplianceData] = useState({ appliances: [], peak_kw: 0, daily_kwh: 0, band: 'B' });
   const [saving,     setSaving]     = useState(false);
   const [error,      setError]      = useState('');
   const [detecting,  setDetecting]  = useState(false);
@@ -158,36 +158,35 @@ export default function Onboarding({ onComplete }) {
   const handleSave = async () => {
     setSaving(true);
     setError('');
-    try {
-      const address = Object.entries(details)
-        .filter(([, v]) => v)
-        .map(([k, v]) => `${k}: ${v}`)
-        .join(', ') || 'completed';
 
-      await updateProfile({
-        country, state, building_type: btype, address,
-        appliances:     applianceData.appliances,
-        peak_demand_kw: applianceData.peak_kw,
-        daily_kwh:      applianceData.daily_kwh,
-      });
+    const address = Object.entries(details)
+      .filter(([, v]) => v)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join(', ') || 'completed';
 
-      // Look up state-level coordinates for map navigation
-      const coords = STATE_COORDS[country]?.[state] ?? null;
-      const stored = JSON.parse(localStorage.getItem('gridai_user') || '{}');
-      localStorage.setItem('gridai_user', JSON.stringify({
-        ...stored, country, state, building_type: btype, address,
-        appliances:     applianceData.appliances,
-        peak_demand_kw: applianceData.peak_kw,
-        daily_kwh:      applianceData.daily_kwh,
-        userLng: coords ? coords[0] : stored.userLng,
-        userLat: coords ? coords[1] : stored.userLat,
-      }));
+    // Save to localStorage immediately — never block the user on API failure
+    const coords = STATE_COORDS[country]?.[state] ?? null;
+    const stored = JSON.parse(localStorage.getItem('gridai_user') || '{}');
+    localStorage.setItem('gridai_user', JSON.stringify({
+      ...stored, country, state, building_type: btype, address,
+      appliances:     applianceData.appliances,
+      peak_demand_kw: applianceData.peak_kw,
+      daily_kwh:      applianceData.daily_kwh,
+      nigeria_band:   applianceData.band,
+      userLng: coords ? coords[0] : stored.userLng,
+      userLat: coords ? coords[1] : stored.userLat,
+    }));
 
-      onComplete(country);
-    } catch (err) {
-      setError('Could not save profile. Please try again.');
-      setSaving(false);
-    }
+    // Fire API save in background — don't await it
+    updateProfile({
+      country, state, building_type: btype, address,
+      appliances:     applianceData.appliances,
+      peak_demand_kw: applianceData.peak_kw,
+      daily_kwh:      applianceData.daily_kwh,
+      nigeria_band:   applianceData.band,
+    }).catch(() => {}); // silent — profile is in localStorage regardless
+
+    onComplete(country);
   };
 
   return (
@@ -373,9 +372,11 @@ export default function Onboarding({ onComplete }) {
               <p style={s.stepDesc}>Set how many of each appliance your building uses — GridAI calculates your load profile automatically.</p>
               <ApplianceCalculator
                 buildingType={btype}
+                country={country}
+                band={applianceData.band}
                 value={applianceData.appliances}
-                onChange={(appliances, peak_kw, daily_kwh) =>
-                  setApplianceData({ appliances, peak_kw, daily_kwh })
+                onChange={(appliances, peak_kw, daily_kwh, band) =>
+                  setApplianceData({ appliances, peak_kw, daily_kwh, band: band ?? applianceData.band })
                 }
               />
               <div style={s.navRow}>
