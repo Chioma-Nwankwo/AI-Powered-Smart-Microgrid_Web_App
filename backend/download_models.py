@@ -29,15 +29,21 @@ COUNTRIES = ['nigeria', 'australia', 'canada', 'germany']
 TARGETS   = ['solar_radiation_wm2', 'wind_speed', 'demand_mw']
 
 
+FEATURE_TARGETS = ['solar_radiation_wm2', 'wind_speed']  # demand_mw has no features.pkl
+
+
 def _files():
     # Legacy (no-type-suffix) model files — used as XGB fallback by model_loader.py
     for c in COUNTRIES:
         for t in TARGETS:
             yield MODELS_DIR, f"{c}_{t}_model.pkl"
-    # Scaler and feature-list files (tiny, ~1–2 KB each)
+    # Scaler files (all targets)
     for c in COUNTRIES:
         for t in TARGETS:
             yield SCALERS_DIR, f"{c}_{t}_scaler.pkl"
+    # Feature-list files (solar + wind only — demand_mw has none)
+    for c in COUNTRIES:
+        for t in FEATURE_TARGETS:
             yield SCALERS_DIR, f"{c}_{t}_features.pkl"
 
 
