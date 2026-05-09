@@ -28,9 +28,85 @@ import logging
 logger = logging.getLogger(__name__)
 anomaly_bp = Blueprint('anomaly', __name__, url_prefix='/api/anomaly')
 
-# Fitted detector cache: country → trained detector set.
-# Re-trained when row count changes (static tail CSVs → stable per deploy).
+# Fitted detector cache: (country, n_rows) → trained detector set.
+# Populated at startup by _prewarm thread so first HTTP request is instant.
 _detector_cache: dict = {}
+
+_DETECTOR_COUNTRIES = ['nigeria', 'australia', 'germany', 'canada']
+_FEAT_BASE = ['solar_radiation_wm2', 'wind_speed']
+_FEAT_EXTRA = ['temperature_celsius', 'pressure', 'precipitation_mm']
+
+
+def _train_detectors(country: str, hist_df) -> dict:
+    """Fit all 4 detectors on hist_df and return a cache-entry dict."""
+    from sklearn.ensemble import IsolationForest
+    from sklearn.decomposition import PCA
+    from sklearn.svm import OneClassSVM
+    from sklearn.neural_network import MLPRegressor
+    from sklearn.preprocessing import StandardScaler
+
+    feat_cols = [c for c in _FEAT_BASE + _FEAT_EXTRA if c in hist_df.columns]
+    X = hist_df[feat_cols].fillna(0).values
+
+    scaler = StandardScaler()
+    Xs = scaler.fit_transform(X)
+
+    iso = IsolationForest(contamination=0.05, random_state=42, n_estimators=50)
+    iso.fit(Xs)
+
+    pca = PCA(n_components=min(3, Xs.shape[1]))
+    pca_recon_err = np.mean((Xs - pca.inverse_transform(pca.fit_transform(Xs))) ** 2, axis=1)
+    pca_thr = float(np.percentile(pca_recon_err, 95))
+
+    svm = OneClassSVM(kernel='rbf', nu=0.05, gamma='scale', max_iter=200)
+    svm.fit(Xs)
+
+    nf = Xs.shape[1]
+    ae = MLPRegressor(
+        hidden_layer_sizes=(nf * 2, max(2, nf // 2), nf * 2),
+        activation='tanh', max_iter=100, random_state=42,
+        early_stopping=True, validation_fraction=0.1, n_iter_no_change=5,
+    )
+    ae.fit(Xs, Xs)
+    ae_thr = float(np.percentile(np.mean((Xs - ae.predict(Xs)) ** 2, axis=1), 95))
+
+    iqr = {}
+    for col in _FEAT_BASE:
+        if col in hist_df.columns:
+            s = hist_df[col].dropna()
+            Q1, Q3 = s.quantile(0.25), s.quantile(0.75)
+            IQR = Q3 - Q1
+            iqr[col] = {'lower': Q1 - 1.5*IQR, 'upper': Q3 + 1.5*IQR,
+                        'median': float(s.median()), 'iqr': max(float(IQR), 1e-9)}
+
+    logger.info("Detectors trained for %s (%d rows, %d features)", country, len(X), nf)
+    return dict(scaler=scaler, feat_cols=feat_cols,
+                iso=iso, pca=pca, pca_thr=pca_thr,
+                svm=svm, ae=ae, ae_thr=ae_thr, iqr=iqr)
+
+
+def _prewarm():
+    """Train detectors for all countries at startup so the first request is instant."""
+    import time, threading
+    time.sleep(8)  # wait for data_loader/CSVs to be ready
+    try:
+        from data_loader import data_loader as dl
+        for country in _DETECTOR_COUNTRIES:
+            try:
+                hist_df = dl.get_latest_data(country, hours=1440)
+                if hist_df is None or hist_df.empty or len(hist_df) < 50:
+                    continue
+                key = (country, len(hist_df))
+                if key not in _detector_cache:
+                    _detector_cache[key] = _train_detectors(country, hist_df)
+            except Exception as exc:
+                logger.warning("Pre-warm failed for %s: %s", country, exc)
+    except Exception as exc:
+        logger.warning("Pre-warm thread error: %s", exc)
+
+
+import threading as _threading
+_threading.Thread(target=_prewarm, daemon=True, name="anomaly-prewarm").start()
 
 
 @anomaly_bp.route('', methods=['GET'], strict_slashes=False)
@@ -56,11 +132,6 @@ def _run_anomalies():
     from model_loader import model_loader
     from datetime import datetime, timedelta
     import math
-    from sklearn.ensemble import IsolationForest
-    from sklearn.decomposition import PCA
-    from sklearn.svm import OneClassSVM
-    from sklearn.neural_network import MLPRegressor
-    from sklearn.preprocessing import StandardScaler
 
     country = request.args.get('country', 'nigeria').lower()
     hours   = int(request.args.get('hours', 48))
@@ -83,74 +154,25 @@ def _run_anomalies():
 
     # ── 1. Load historical training data ─────────────────────────────
     hist_df = dl.get_latest_data(country, hours=max(hours * 6, 1440))
-    FEAT_COLS = ['solar_radiation_wm2', 'wind_speed']
-    for c in ['temperature_celsius', 'pressure', 'precipitation_mm']:
-        if hist_df is not None and c in hist_df.columns:
-            FEAT_COLS.append(c)
 
-    if hist_df is None or hist_df.empty:
-        return jsonify({'anomalies': [], 'country': country, 'hours': hours,
-                        'detectors': [], 'note': 'No historical data available'})
-
-    hist_cols = [c for c in FEAT_COLS if c in hist_df.columns]
-    X_hist = hist_df[hist_cols].fillna(0).values
-    if len(X_hist) < 50:
+    if hist_df is None or hist_df.empty or len(hist_df) < 50:
         return jsonify({'anomalies': [], 'country': country, 'hours': hours,
                         'detectors': [], 'note': 'Insufficient historical data'})
 
-    # ── 2. Fit 4 sklearn detectors — cached per (country, n_rows) ────
-    cache_key = (country, len(X_hist))
+    # ── 2. Get cached detectors (or train if pre-warm not finished yet) ─
+    cache_key = (country, len(hist_df))
     if cache_key not in _detector_cache:
-        logger.info("Training anomaly detectors for %s (%d rows)…", country, len(X_hist))
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X_hist)
+        logger.info("Cache miss — training detectors for %s on request", country)
+        _detector_cache[cache_key] = _train_detectors(country, hist_df)
 
-        iso_forest = IsolationForest(contamination=0.05, random_state=42, n_estimators=100)
-        iso_forest.fit(X_scaled)
-
-        pca = PCA(n_components=min(3, X_scaled.shape[1]))
-        X_pca = pca.fit_transform(X_scaled)
-        recon_errors = np.mean((X_scaled - pca.inverse_transform(X_pca)) ** 2, axis=1)
-        pca_threshold = np.percentile(recon_errors, 95)
-
-        ocsvm = OneClassSVM(kernel='rbf', nu=0.05, gamma='scale', max_iter=500)
-        ocsvm.fit(X_scaled)
-
-        n_feat = X_scaled.shape[1]
-        ae = MLPRegressor(
-            hidden_layer_sizes=(n_feat * 2, max(2, n_feat // 2), n_feat * 2),
-            activation='tanh', max_iter=200, random_state=42,
-            early_stopping=True, validation_fraction=0.1, n_iter_no_change=10,
-        )
-        ae.fit(X_scaled, X_scaled)
-        ae_errors = np.mean((X_scaled - ae.predict(X_scaled)) ** 2, axis=1)
-        ae_threshold = np.percentile(ae_errors, 95)
-
-        iqr_bounds = {}
-        for col in ['solar_radiation_wm2', 'wind_speed']:
-            if col in hist_df.columns:
-                s = hist_df[col].dropna()
-                Q1, Q3 = s.quantile(0.25), s.quantile(0.75)
-                IQR = Q3 - Q1
-                iqr_bounds[col] = {'lower': Q1 - 1.5*IQR, 'upper': Q3 + 1.5*IQR,
-                                    'median': float(s.median()), 'iqr': max(float(IQR), 1e-9)}
-
-        _detector_cache[cache_key] = dict(
-            scaler=scaler, iso_forest=iso_forest,
-            pca=pca, pca_threshold=pca_threshold,
-            ocsvm=ocsvm, ae=ae, ae_threshold=ae_threshold,
-            iqr_bounds=iqr_bounds,
-        )
-        logger.info("Detectors trained and cached for %s", country)
-
-    c = _detector_cache[cache_key]
-    scaler        = c['scaler']
-    iso_forest    = c['iso_forest']
-    pca           = c['pca'];       pca_threshold = c['pca_threshold']
-    ocsvm         = c['ocsvm']
-    ae            = c['ae'];        ae_threshold  = c['ae_threshold']
-    iqr_bounds    = c['iqr_bounds']
-    X_scaled      = scaler.transform(X_hist)
+    det        = _detector_cache[cache_key]
+    scaler     = det['scaler']
+    hist_cols  = det['feat_cols']
+    iso_forest = det['iso']
+    pca        = det['pca'];   pca_threshold = det['pca_thr']
+    ocsvm      = det['svm']
+    ae         = det['ae'];    ae_threshold  = det['ae_thr']
+    iqr_bounds = det['iqr']
 
     # ── 3. Get forecast points to evaluate ───────────────────────────
     now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
