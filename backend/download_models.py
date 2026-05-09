@@ -19,7 +19,7 @@ except ImportError:
 
 import urllib.request as _urllib
 
-RELEASE_URL = os.environ.get('MODELS_RELEASE_URL', '').rstrip('/')
+RELEASE_URL = os.environ.get('MODELS_RELEASE_URL', '').strip().rstrip('/')
 
 REPO_ROOT   = Path(__file__).parent.parent
 MODELS_DIR  = REPO_ROOT / 'models' / 'trained'
