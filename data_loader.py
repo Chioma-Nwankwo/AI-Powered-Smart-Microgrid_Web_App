@@ -21,6 +21,14 @@ class RealDataLoader:
         'germany': 'data/processed/germany_processed_data.csv',
         'nigeria': 'data/processed/nigeria_processed_data.csv'
     }
+
+    # Lightweight tail files committed to git — used in production when full CSVs aren't present
+    LATEST = {
+        'australia': 'data/latest/australia_latest.csv',
+        'canada':    'data/latest/canada_latest.csv',
+        'germany':   'data/latest/germany_latest.csv',
+        'nigeria':   'data/latest/nigeria_latest.csv',
+    }
     
     def __init__(self, data_dir: str = "."):
         """Initialize data loader
@@ -52,11 +60,16 @@ class RealDataLoader:
             logger.error(f"Unknown country: {country}. Available: {list(self.COUNTRIES.keys())}")
             return None
         
-        # Load CSV file
+        # Prefer full processed CSV; fall back to committed tail file for production
         file_path = self.data_dir / self.COUNTRIES[country]
         if not file_path.exists():
-            logger.error(f"Data file not found: {file_path}")
-            return None
+            alt = self.data_dir / self.LATEST.get(country, '')
+            if alt.exists():
+                logger.info(f"Full CSV not found, using latest tail: {alt}")
+                file_path = alt
+            else:
+                logger.error(f"Data file not found: {file_path}")
+                return None
         
         try:
             logger.info(f"Loading data from {file_path}")
