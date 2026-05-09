@@ -84,10 +84,9 @@ def main() -> None:
 
     print(f"\nModels ready: {done}/{total}")
     if failed:
-        print(f"Failed ({len(failed)}):", file=sys.stderr)
+        print(f"Warning — {len(failed)} file(s) not downloaded (physics fallback will be used):", file=sys.stderr)
         for f in failed:
             print(f"  - {f}", file=sys.stderr)
-        sys.exit(1)
 
 
 if __name__ == '__main__':
