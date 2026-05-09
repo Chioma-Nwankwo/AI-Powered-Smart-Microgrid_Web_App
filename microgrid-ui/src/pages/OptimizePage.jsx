@@ -59,17 +59,17 @@ export default function OptimizePage({ selectedCountry, onCountryChange }) {
             {[
               {
                 icon: Sun,     color: '#C8793F',
-                title: 'Solar Surplus Charging',
+                title: t('solarSurplusCharging'),
                 desc:  'When solar generation exceeds load, excess energy charges the battery up to 95 % SoC at max C/4 rate.',
               },
               {
                 icon: Battery, color: '#7B52A8',
-                title: 'Peak-Hour Discharge',
+                title: t('peakHourDischarge'),
                 desc:  'Battery discharges when solar cannot cover load, maintaining minimum 10 % SoC reserve at all times.',
               },
               {
                 icon: DollarSign, color: '#1A7A3F',
-                title: 'Time-of-Use Pricing',
+                title: t('timeOfUsePricing'),
                 desc:  'Grid import cost is weighted 1.5× during 18:00–21:00 peak and 0.8× during off-peak hours 23:00–06:00.',
               },
             ].map(({ icon: Icon, color, title, desc }) => (
@@ -87,7 +87,7 @@ export default function OptimizePage({ selectedCountry, onCountryChange }) {
 
           {/* Parameter reference */}
           <div style={s.paramCard}>
-            <p style={s.paramTitle}>Default System Parameters</p>
+            <p style={s.paramTitle}>{t('defaultSystemParams')}</p>
             <div style={s.paramGrid}>
               {[
                 { label: 'Battery capacity',  value: `${caps.battery_kwh} kWh` },

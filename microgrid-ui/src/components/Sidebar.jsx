@@ -22,7 +22,7 @@ export default function Sidebar({ selectedCountry, onCountryChange }) {
     { to: '/forecast', icon: TrendingUp,      label: t('forecast'),     color: '#10B981' },
     { to: '/optimize', icon: Zap,             label: t('optimization'), color: '#FBBF24' },
     { to: '/anomaly',  icon: AlertTriangle,   label: t('anomaly'),      color: '#F43F5E' },
-    { to: '/report',   icon: FileText,        label: 'Report',          color: '#38BDF8' },
+    { to: '/report',   icon: FileText,        label: t('report'),       color: '#38BDF8' },
     { to: '/settings', icon: Settings,        label: t('settings'),     color: '#A78BFA' },
   ];
 

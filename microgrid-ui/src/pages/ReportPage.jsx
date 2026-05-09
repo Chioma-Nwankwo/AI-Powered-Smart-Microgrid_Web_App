@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import { getForecast, getOptimization, getAnomalies, COUNTRIES } from '../services/api';
 import { APPLIANCE_CATALOG, CURRENCY } from '../components/ApplianceCalculator';
+import { useLanguage } from '../context/LanguageContext';
 import { Printer, ArrowLeft } from 'lucide-react';
 
 const BUILDING_CAPACITY = {
@@ -23,6 +24,7 @@ function forecastStats(rows, prefix) {
 
 export default function ReportPage({ selectedCountry, onCountryChange }) {
   const navigate  = useNavigate();
+  const { t }     = useLanguage();
   const printRef  = useRef();
   const profile   = (() => { try { return JSON.parse(localStorage.getItem('gridai_user') || '{}'); } catch { return {}; } })();
   const country     = (profile.country || 'nigeria').toLowerCase();
@@ -107,10 +109,10 @@ export default function ReportPage({ selectedCountry, onCountryChange }) {
         {/* Toolbar — hidden on print */}
         <div style={s.toolbar} className="no-print">
           <button style={s.backBtn} onClick={() => navigate('/')}>
-            <ArrowLeft size={14} /> Back to Dashboard
+            <ArrowLeft size={14} /> {t('backToDashboard')}
           </button>
           <button style={s.printBtn} onClick={handlePrint} disabled={loading}>
-            <Printer size={14} /> {loading ? 'Loading data…' : 'Print / Save PDF'}
+            <Printer size={14} /> {loading ? t('loadingData') : t('printSavePdf')}
           </button>
         </div>
 
@@ -124,7 +126,7 @@ export default function ReportPage({ selectedCountry, onCountryChange }) {
               <span style={s.docLogoSub}>Smart Microgrid Analytics</span>
             </div>
             <div style={s.docMeta}>
-              <p className="report-meta" style={s.metaLine}>Microgrid Performance Report</p>
+              <p className="report-meta" style={s.metaLine}>{t('microgridReport')}</p>
               <p className="report-meta" style={s.metaDate}>Generated: {reportDate}</p>
             </div>
           </div>

@@ -512,7 +512,7 @@ const s = {
   /* Step content */
   stepTitle: {
     fontFamily: 'Rajdhani, var(--font-display)', fontSize: 22, fontWeight: 700,
-    color: 'var(--text-primary)', marginBottom: 6,
+    color: 'rgba(255,255,255,0.92)', marginBottom: 6,
   },
   stepDesc: { fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 },
 

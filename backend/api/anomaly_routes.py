@@ -28,6 +28,10 @@ import logging
 logger = logging.getLogger(__name__)
 anomaly_bp = Blueprint('anomaly', __name__, url_prefix='/api/anomaly')
 
+# Fitted detector cache: country → trained detector set.
+# Re-trained when row count changes (static tail CSVs → stable per deploy).
+_detector_cache: dict = {}
+
 
 @anomaly_bp.route('', methods=['GET'], strict_slashes=False)
 def get_anomalies():
@@ -55,6 +59,7 @@ def _run_anomalies():
     from sklearn.ensemble import IsolationForest
     from sklearn.decomposition import PCA
     from sklearn.svm import OneClassSVM
+    from sklearn.neural_network import MLPRegressor
     from sklearn.preprocessing import StandardScaler
 
     country = request.args.get('country', 'nigeria').lower()
@@ -93,32 +98,59 @@ def _run_anomalies():
         return jsonify({'anomalies': [], 'country': country, 'hours': hours,
                         'detectors': [], 'note': 'Insufficient historical data'})
 
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X_hist)
+    # ── 2. Fit 4 sklearn detectors — cached per (country, n_rows) ────
+    cache_key = (country, len(X_hist))
+    if cache_key not in _detector_cache:
+        logger.info("Training anomaly detectors for %s (%d rows)…", country, len(X_hist))
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X_hist)
 
-    # ── 2. Fit 3 sklearn detectors on historical data ─────────────────
-    iso_forest = IsolationForest(contamination=0.05, random_state=42, n_estimators=100)
-    iso_forest.fit(X_scaled)
+        iso_forest = IsolationForest(contamination=0.05, random_state=42, n_estimators=100)
+        iso_forest.fit(X_scaled)
 
-    pca = PCA(n_components=min(3, X_scaled.shape[1]))
-    X_pca = pca.fit_transform(X_scaled)
-    X_recon = pca.inverse_transform(X_pca)
-    recon_errors = np.mean((X_scaled - X_recon) ** 2, axis=1)
-    pca_threshold = np.percentile(recon_errors, 95)
+        pca = PCA(n_components=min(3, X_scaled.shape[1]))
+        X_pca = pca.fit_transform(X_scaled)
+        recon_errors = np.mean((X_scaled - pca.inverse_transform(X_pca)) ** 2, axis=1)
+        pca_threshold = np.percentile(recon_errors, 95)
 
-    ocsvm = OneClassSVM(kernel='rbf', nu=0.05, gamma='scale')
-    ocsvm.fit(X_scaled)
+        ocsvm = OneClassSVM(kernel='rbf', nu=0.05, gamma='scale', max_iter=500)
+        ocsvm.fit(X_scaled)
 
-    # Also compute IQR bounds for score magnitude
-    hist_2col = hist_df[['solar_radiation_wm2', 'wind_speed']].dropna()
-    iqr_bounds = {}
-    for col in ['solar_radiation_wm2', 'wind_speed']:
-        if col in hist_df.columns:
-            s = hist_df[col].dropna()
-            Q1, Q3 = s.quantile(0.25), s.quantile(0.75)
-            IQR = Q3 - Q1
-            iqr_bounds[col] = {'lower': Q1 - 1.5*IQR, 'upper': Q3 + 1.5*IQR,
-                                'median': float(s.median()), 'iqr': max(float(IQR), 1e-9)}
+        n_feat = X_scaled.shape[1]
+        ae = MLPRegressor(
+            hidden_layer_sizes=(n_feat * 2, max(2, n_feat // 2), n_feat * 2),
+            activation='tanh', max_iter=200, random_state=42,
+            early_stopping=True, validation_fraction=0.1, n_iter_no_change=10,
+        )
+        ae.fit(X_scaled, X_scaled)
+        ae_errors = np.mean((X_scaled - ae.predict(X_scaled)) ** 2, axis=1)
+        ae_threshold = np.percentile(ae_errors, 95)
+
+        iqr_bounds = {}
+        for col in ['solar_radiation_wm2', 'wind_speed']:
+            if col in hist_df.columns:
+                s = hist_df[col].dropna()
+                Q1, Q3 = s.quantile(0.25), s.quantile(0.75)
+                IQR = Q3 - Q1
+                iqr_bounds[col] = {'lower': Q1 - 1.5*IQR, 'upper': Q3 + 1.5*IQR,
+                                    'median': float(s.median()), 'iqr': max(float(IQR), 1e-9)}
+
+        _detector_cache[cache_key] = dict(
+            scaler=scaler, iso_forest=iso_forest,
+            pca=pca, pca_threshold=pca_threshold,
+            ocsvm=ocsvm, ae=ae, ae_threshold=ae_threshold,
+            iqr_bounds=iqr_bounds,
+        )
+        logger.info("Detectors trained and cached for %s", country)
+
+    c = _detector_cache[cache_key]
+    scaler        = c['scaler']
+    iso_forest    = c['iso_forest']
+    pca           = c['pca'];       pca_threshold = c['pca_threshold']
+    ocsvm         = c['ocsvm']
+    ae            = c['ae'];        ae_threshold  = c['ae_threshold']
+    iqr_bounds    = c['iqr_bounds']
+    X_scaled      = scaler.transform(X_hist)
 
     # ── 3. Get forecast points to evaluate ───────────────────────────
     now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
@@ -150,7 +182,7 @@ def _run_anomalies():
 
         X_point = scaler.transform([feat_vals])
 
-        # Run 3 detectors
+        # Run 4 detectors
         if_pred   = iso_forest.predict(X_point)[0]          # -1 = anomaly
         if_score  = -iso_forest.score_samples(X_point)[0]   # higher = more anomalous
 
@@ -161,14 +193,18 @@ def _run_anomalies():
         svm_pred   = ocsvm.predict(X_point)[0]              # -1 = anomaly
         svm_score  = -ocsvm.score_samples(X_point)[0]
 
-        votes = sum(1 for p in [if_pred, pca_pred, svm_pred] if p == -1)
-        is_anomaly = votes >= 2   # majority vote (Chapter 3.6.2)
+        ae_recon_pt = ae.predict(X_point)
+        ae_err      = float(np.mean((X_point - ae_recon_pt) ** 2))
+        ae_pred     = -1 if ae_err > ae_threshold else 1
+
+        votes = sum(1 for p in [if_pred, pca_pred, svm_pred, ae_pred] if p == -1)
+        is_anomaly = votes >= 2   # majority vote ≥2/4 (Chapter 3.6.2)
 
         if not is_anomaly:
             continue
 
-        # Composite anomaly score (normalised average)
-        comp_score = (if_score + (pca_err / max(pca_threshold, 1e-9)) + max(0, svm_score)) / 3.0
+        # Composite anomaly score (normalised average across 4 detectors)
+        comp_score = (if_score + (pca_err / max(pca_threshold, 1e-9)) + max(0, svm_score) + (ae_err / max(ae_threshold, 1e-9))) / 4.0
         sev_i = min(3, int(comp_score * 4))
 
         # Variable attribution: which variable deviated most from IQR
@@ -191,11 +227,12 @@ def _run_anomalies():
             'value':          round(col_val, 4),
             'anomaly_score':  round(float(comp_score), 4),
             'severity':       severity_map[sev_i],
-            'model':          'Ensemble (IF + PCA + OCSVM, majority vote)',
+            'model':          'Ensemble (IF + PCA + OCSVM + AE, majority vote)',
             'detector_votes': {
-                'isolation_forest': if_pred == -1,
+                'isolation_forest':   if_pred  == -1,
                 'pca_reconstruction': pca_pred == -1,
-                'one_class_svm': svm_pred == -1,
+                'one_class_svm':      svm_pred == -1,
+                'autoencoder':        ae_pred  == -1,
             },
             'bounds': {
                 'lower': round(float(bounds.get('lower', 0)), 3),
@@ -212,8 +249,9 @@ def _run_anomalies():
         'anomalies':   anomalies[:30],
         'detectors':   ['Isolation Forest (n=100, contamination=0.05)',
                         'PCA Reconstruction (95% variance, threshold=95th pct)',
-                        'One-Class SVM (RBF kernel, nu=0.05)'],
-        'ensemble':    'Majority vote ≥ 2/3 detectors',
+                        'One-Class SVM (RBF kernel, nu=0.05)',
+                        'Autoencoder MLP (bottleneck reconstruction, threshold=95th pct)'],
+        'ensemble':    'Majority vote ≥ 2/4 detectors',
         'note':        f'Chapter 3.6.2 ensemble anomaly detection on {hours}h XGBoost forecast.',
     })
 

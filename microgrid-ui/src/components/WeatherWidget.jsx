@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Wind, Droplets, Cloud, MapPin } from 'lucide-react';
 import { getWeather, COUNTRIES } from '../services/api';
 import { useLanguage } from '../context/LanguageContext';
+import useUnits from '../hooks/useUnits';
 
 const WX_ICONS = {
   Clear: '☀️', Clouds: '☁️', Rain: '🌧️',
@@ -11,6 +12,7 @@ const WX_ICONS = {
 
 export default function WeatherWidget({ country }) {
   const { t } = useLanguage();
+  const { tempStr, windStr } = useUnits();
   const [wx,      setWx]      = useState(null);
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState(false);
@@ -51,10 +53,10 @@ export default function WeatherWidget({ country }) {
 
   const main      = wx.weather?.[0]?.main ?? '—';
   const desc      = wx.weather?.[0]?.description ?? '';
-  const temp      = wx.main?.temp?.toFixed(1) ?? '—';
-  const feelsLike = wx.main?.feels_like?.toFixed(1) ?? '—';
+  const tempC     = wx.main?.temp ?? 0;
+  const feelsC    = wx.main?.feels_like ?? 0;
   const humidity  = wx.main?.humidity ?? '—';
-  const windSpeed = ((wx.wind?.speed ?? 0) * 3.6).toFixed(1);
+  const windMps   = wx.wind?.speed ?? 0;
   const clouds    = wx.clouds?.all ?? '—';
   const emoji     = WX_ICONS[main] ?? '🌤️';
 
@@ -72,15 +74,15 @@ export default function WeatherWidget({ country }) {
       <div style={s.mainRow}>
         <span style={s.emoji}>{emoji}</span>
         <div>
-          <span style={s.temp}>{temp}°C</span>
+          <span style={s.temp}>{tempStr(tempC)}</span>
           <p style={s.desc}>{desc}</p>
-          <p style={s.feelsLike}>{t('feelsLike')} {feelsLike}°C</p>
+          <p style={s.feelsLike}>{t('feelsLike')} {tempStr(feelsC)}</p>
         </div>
       </div>
 
       <div style={s.statsGrid}>
         <Stat icon={<Droplets size={11} color="var(--text-muted)" />} label={t('humidity')}  value={`${humidity}%`} />
-        <Stat icon={<Wind     size={11} color="var(--text-muted)" />} label={t('wind')}      value={`${windSpeed} km/h`} />
+        <Stat icon={<Wind     size={11} color="var(--text-muted)" />} label={t('wind')}      value={windStr(windMps)} />
         <Stat icon={<Cloud    size={11} color="var(--text-muted)" />} label={t('cloud')}     value={`${clouds}%`} />
       </div>
     </div>

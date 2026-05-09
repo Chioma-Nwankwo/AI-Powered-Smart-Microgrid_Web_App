@@ -6,13 +6,8 @@ import {
 import { TrendingUp, RefreshCw } from 'lucide-react';
 import { getForecast } from '../services/api';
 import { useLanguage } from '../context/LanguageContext';
+import useUnits from '../hooks/useUnits';
 import { format } from 'date-fns';
-
-const METRICS = [
-  { key: 'solar',  label: 'Solar (W/m²)', unit: 'W/m²' },
-  { key: 'wind',   label: 'Wind (m/s)',   unit: 'm/s'  },
-  { key: 'demand', label: 'Demand (MW)',  unit: 'MW'   },
-];
 
 // UTC offsets per country (standard time; Australia uses AEST UTC+10)
 const COUNTRY_UTC_OFFSET = {
@@ -50,6 +45,12 @@ const CustomTooltip = ({ active, payload, label, unit }) => {
 
 export default function ForecastChart({ country }) {
   const { t } = useLanguage();
+  const { windLabel, windUnit } = useUnits();
+  const METRICS = [
+    { key: 'solar',  label: 'Solar (W/m²)', unit: 'W/m²'    },
+    { key: 'wind',   label: windLabel,       unit: windUnit   },
+    { key: 'demand', label: 'Demand (MW)',   unit: 'MW'       },
+  ];
   const [data,      setData]      = useState([]);
   const [active,    setActive]    = useState('solar');
   const [available, setAvailable] = useState([]);

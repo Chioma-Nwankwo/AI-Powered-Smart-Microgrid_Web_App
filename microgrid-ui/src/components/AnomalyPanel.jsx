@@ -35,7 +35,7 @@ export default function AnomalyPanel({ country }) {
         <div style={s.titleRow}>
           <ShieldAlert size={15} color={critCount > 0 ? 'var(--red)' : 'var(--green)'} />
           <span style={s.title}>ANOMALY DETECTION</span>
-          <span style={s.subtitle}>— IF · PCA · OCSVM ensemble</span>
+          <span style={s.subtitle}>— IF · PCA · OCSVM · AE ensemble</span>
         </div>
         <span style={{
           ...s.badge,
@@ -96,7 +96,7 @@ export default function AnomalyPanel({ country }) {
                         color: flagged ? 'var(--red)' : 'var(--green)',
                         border: `1px solid ${flagged ? 'rgba(255,77,109,0.20)' : 'rgba(0,224,150,0.20)'}`,
                       }}>
-                        {det === 'isolation_forest' ? 'IF' : det === 'pca_reconstruction' ? 'PCA' : 'OCSVM'}
+                        {det === 'isolation_forest' ? 'IF' : det === 'pca_reconstruction' ? 'PCA' : det === 'autoencoder' ? 'AE' : 'OCSVM'}
                         {flagged ? ' ✕' : ' ✓'}
                       </span>
                     ))}

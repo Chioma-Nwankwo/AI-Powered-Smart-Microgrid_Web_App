@@ -23,7 +23,7 @@ export default function AnomalyPage({ selectedCountry, onCountryChange }) {
                 {flag} {label}
                 <span style={s.pageSub}> — {t('anomalyDetection')}</span>
               </h1>
-              <p style={s.pageDesc}>IF · PCA · OCSVM ensemble · majority vote ≥ 2/3 · 48-hour window</p>
+              <p style={s.pageDesc}>IF · PCA · OCSVM · AE ensemble · majority vote ≥ 2/4 · 48-hour window</p>
             </div>
           </div>
           <div style={s.topRight}>
@@ -61,9 +61,9 @@ export default function AnomalyPage({ selectedCountry, onCountryChange }) {
                   desc: 'Learns a hypersphere boundary around normal operating data. Points outside the RBF kernel boundary are flagged as out-of-distribution anomalies.',
                 },
                 {
-                  icon: Activity, color: '#64748B', active: false,
+                  icon: Activity, color: '#64748B', active: true,
                   name: 'Autoencoder',
-                  desc: 'Neural network that reconstructs normal patterns. High reconstruction error flags anomalous behaviour in solar irradiance and demand profiles. (Planned — Chapter 3.6)',
+                  desc: 'MLP-based reconstruction network trained to reproduce normal operating patterns. High reconstruction error indicates anomalous behaviour in solar irradiance and demand profiles.',
                 },
               ].map(({ icon: Icon, color, name, desc, active }) => (
                 <div key={name} style={{ ...s.ensembleItem, borderLeft: `3px solid ${color}`, opacity: active ? 1 : 0.5 }}>
@@ -77,7 +77,7 @@ export default function AnomalyPage({ selectedCountry, onCountryChange }) {
               ))}
             </div>
             <p style={s.ensembleNote}>
-              Three detectors run simultaneously on the 48-hour forecast window. An event is flagged when ≥ 2 of the 3 active models agree (majority vote).
+              Four detectors run simultaneously on the 48-hour forecast window. An event is flagged when ≥ 2 of the 4 models agree (majority vote).
               Severity is determined by the fraction of models voting positive and the magnitude of deviation from the learned normal range.
             </p>
           </div>

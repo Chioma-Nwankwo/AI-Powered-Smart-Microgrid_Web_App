@@ -38,6 +38,7 @@ export default function Settings({ selectedCountry, onCountryChange }) {
 
   const handleSave = () => {
     localStorage.setItem('gridai_units', units);
+    window.dispatchEvent(new Event('gridai-units-changed'));
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
