@@ -13,12 +13,22 @@ logger = logging.getLogger(__name__)
 
 class MongoHandler:
     """MongoDB connection and operations handler"""
-    
+
     def __init__(self):
-        """Initialize MongoDB connection"""
+        self.client = None
+        self.db = None
+        self._connect()
+
+    def _connect(self):
+        """Attempt (re-)connection. Safe to call multiple times."""
+        uri = config.MONGODB_URI
+        if not uri or uri.startswith('mongodb://localhost'):
+            # No real URI configured — skip the 5-second timeout entirely
+            logger.warning("MONGODB_URI not set or points to localhost — database unavailable. "
+                           "Set MONGODB_URI in the Render environment variables.")
+            return
         try:
-            self.client = MongoClient(config.MONGODB_URI, serverSelectionTimeoutMS=5000)
-            # Test connection
+            self.client = MongoClient(uri, serverSelectionTimeoutMS=3000)
             self.client.admin.command('ping')
             self.db = self.client[config.MONGODB_DB]
             logger.info("MongoDB connection established successfully")
@@ -27,6 +37,15 @@ class MongoHandler:
             logger.error(f"MongoDB connection failed: {e}")
             self.client = None
             self.db = None
+
+    @property
+    def available(self):
+        return self.db is not None
+
+    def _ensure_connected(self):
+        """Reconnect once if we lost the connection."""
+        if self.db is None:
+            self._connect()
     
     def _create_collections(self):
         """Create necessary collections and indexes"""
@@ -66,7 +85,7 @@ class MongoHandler:
             logger.error(f"Error creating MongoDB collections: {e}")
     
     def insert_one(self, collection_name, document):
-        """Insert a single document"""
+        self._ensure_connected()
         try:
             if self.db is None:
                 return None
@@ -88,7 +107,7 @@ class MongoHandler:
             return None
     
     def find_one(self, collection_name, query):
-        """Find a single document"""
+        self._ensure_connected()
         try:
             if self.db is None:
                 return None

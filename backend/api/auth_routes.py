@@ -25,8 +25,12 @@ logger = logging.getLogger(__name__)
 def signup():
     """Register a new user"""
     try:
+        from database.mongo_handler import mongo_db
+        if not mongo_db.available:
+            return jsonify({'error': 'Database not configured. Set MONGODB_URI in the Render environment variables.'}), 503
+
         data = request.get_json()
-        
+
         logger.info(f"Signup attempt for email: {data.get('email')}")
         
         # Validate required fields
@@ -92,15 +96,19 @@ def signup():
 def login():
     """Login with email/user_id and password"""
     try:
+        from database.mongo_handler import mongo_db
+        if not mongo_db.available:
+            return jsonify({'error': 'Database not configured. Set MONGODB_URI in the Render environment variables.'}), 503
+
         data = request.get_json()
-        
+
         # Support both 'identifier' and 'email' fields
         identifier = data.get('identifier') or data.get('email')
         password = data.get('password')
-        
+
         if not identifier or not password:
             return jsonify({'error': 'Missing credentials'}), 400
-        
+
         success, message, user_data = user_manager.login_user(identifier, password)
         
         if success:

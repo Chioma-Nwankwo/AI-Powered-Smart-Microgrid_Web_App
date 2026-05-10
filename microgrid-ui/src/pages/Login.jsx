@@ -96,7 +96,8 @@ export default function Login() {
         await loginWithEmail(email, password);
         navigate('/');
       } catch (err) {
-        setError(err?.response?.data?.error || 'Incorrect email or password.');
+        const msg = err?.response?.data?.error || '';
+        setError(msg || 'Incorrect email or password.');
       } finally {
         setLoading(null);
       }
