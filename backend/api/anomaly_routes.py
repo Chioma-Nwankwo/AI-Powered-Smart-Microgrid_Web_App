@@ -46,7 +46,11 @@ def _train_detectors(country: str, hist_df) -> dict:
     from sklearn.preprocessing import StandardScaler
 
     feat_cols = [c for c in _FEAT_BASE + _FEAT_EXTRA if c in hist_df.columns]
-    X = hist_df[feat_cols].fillna(0).values
+    # Replace Inf/-Inf with 0 before filling NaN — StandardScaler throws on Inf
+    X = (hist_df[feat_cols]
+         .replace([np.inf, -np.inf], np.nan)
+         .fillna(0)
+         .values.astype(float))
 
     scaler = StandardScaler()
     Xs = scaler.fit_transform(X)
@@ -202,9 +206,11 @@ def _run_anomalies():
             if col == 'solar_radiation_wm2': feat_vals.append(solar_preds[i])
             elif col == 'wind_speed':        feat_vals.append(wind_preds[i])
             else:
-                col_mean = float(hist_df[col].mean()) if col in hist_df.columns else 0.0
-                feat_vals.append(col_mean)
+                raw = hist_df[col].replace([np.inf, -np.inf], np.nan).mean() if col in hist_df.columns else 0.0
+                feat_vals.append(float(raw) if not np.isnan(raw) else 0.0)
 
+        # Guard against any remaining NaN/Inf before passing to sklearn
+        feat_vals = [0.0 if (v != v or np.isinf(v)) else v for v in feat_vals]
         X_point = scaler.transform([feat_vals])
 
         # Run 4 detectors
