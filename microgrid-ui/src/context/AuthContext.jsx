@@ -9,9 +9,23 @@ export function AuthProvider({ children }) {
   const [loading, setLoading]       = useState(true);
   const [serverReady, setServerReady] = useState(false);
 
-  // Pre-warm Render server on mount so it's awake before the user clicks login
+  // Keep pinging until the server actually responds 200.
+  // Without retry: a refused connection (Render waking up) resolves the promise
+  // immediately, the banner disappears, and the user logs in against a dead server.
   useEffect(() => {
-    pingServer().finally(() => setServerReady(true));
+    let cancelled = false;
+    (async () => {
+      for (let i = 0; i < 25 && !cancelled; i++) {
+        try {
+          await pingServer();
+          break;
+        } catch {
+          if (!cancelled) await new Promise(r => setTimeout(r, 3000));
+        }
+      }
+      if (!cancelled) setServerReady(true);
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   // Restore session on mount

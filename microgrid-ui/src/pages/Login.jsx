@@ -185,9 +185,9 @@ export default function Login() {
               </div>
 
               <button
-                style={{ ...s.oauthBtn, ...(loading === 'microsoft' ? s.btnDisabled : {}) }}
+                style={{ ...s.oauthBtn, ...((loading === 'microsoft' || !serverReady) ? s.btnDisabled : {}) }}
                 onClick={handleMicrosoft}
-                disabled={!!loading}
+                disabled={!!loading || !serverReady}
               >
                 <MicrosoftIcon />
                 {loading === 'microsoft' ? 'Connecting…' : 'Continue with Microsoft'}
@@ -282,8 +282,8 @@ export default function Login() {
               )}
               <button
                 type="submit"
-                style={{ ...s.submitBtn, ...(loading === 'email' ? s.btnDisabled : {}) }}
-                disabled={!!loading}
+                style={{ ...s.submitBtn, ...((loading === 'email' || !serverReady) ? s.btnDisabled : {}) }}
+                disabled={!!loading || !serverReady}
               >
                 {loading === 'email'
                   ? (isSignUp ? 'Creating account…' : 'Authenticating…')
