@@ -58,8 +58,11 @@ def _train_detectors(country: str, hist_df) -> dict:
     pca_recon_err = np.mean((Xs - pca.inverse_transform(pca.fit_transform(Xs))) ** 2, axis=1)
     pca_thr = float(np.percentile(pca_recon_err, 95))
 
+    # Cap at 500 rows: RBF kernel is O(n²), so 1440 rows → ~60 s on Render free CPU.
+    # 500 rows (≈21 days) is representative enough and trains in < 2 s.
+    Xs_svm = Xs[-500:] if len(Xs) > 500 else Xs
     svm = OneClassSVM(kernel='rbf', nu=0.05, gamma='scale', max_iter=200)
-    svm.fit(Xs)
+    svm.fit(Xs_svm)
 
     nf = Xs.shape[1]
     ae = MLPRegressor(
