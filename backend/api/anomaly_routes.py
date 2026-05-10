@@ -130,126 +130,129 @@ def get_anomalies():
 
 
 def _run_anomalies():
-    """GET /api/anomaly?country=nigeria&hours=48
-    Chapter 3.6.2 ensemble: Isolation Forest + PCA + One-Class SVM + Autoencoder.
-    Fitted on 1440h historical ERA5 data; evaluated on the most recent `hours` rows
-    of the same historical data so real extreme-weather events are detected.
-    Majority vote ≥2/4 detectors flags an anomaly.
-    """
+    """GET /api/anomaly?country=nigeria&hours=48"""
     from data_loader import data_loader as dl
-    from datetime import timezone
 
     country = request.args.get('country', 'nigeria').lower()
     hours   = int(request.args.get('hours', 48))
 
-    # ── 1. Load historical data ───────────────────────────────────────
+    # ── 1. Load data ──────────────────────────────────────────────────
     hist_df = dl.get_latest_data(country, hours=1440)
-
     if hist_df is None or hist_df.empty or len(hist_df) < 50:
         return jsonify({'anomalies': [], 'country': country, 'hours': hours,
                         'detectors': [], 'note': 'Insufficient historical data'})
 
-    # ── 2. Get cached detectors (or train if pre-warm not finished yet) ─
+    # ── 2. Train / retrieve cached detectors ──────────────────────────
     cache_key = (country, len(hist_df))
     if cache_key not in _detector_cache:
-        logger.info("Cache miss — training detectors for %s on request", country)
         _detector_cache[cache_key] = _train_detectors(country, hist_df)
 
     det        = _detector_cache[cache_key]
     scaler     = det['scaler']
-    hist_cols  = det['feat_cols']
+    feat_cols  = det['feat_cols']
     iso_forest = det['iso']
-    pca        = det['pca'];   pca_threshold = det['pca_thr']
+    pca        = det['pca'];  pca_thr = det['pca_thr']
     ocsvm      = det['svm']
-    ae         = det['ae'];    ae_threshold  = det['ae_thr']
+    ae         = det['ae'];   ae_thr  = det['ae_thr']
     iqr_bounds = det['iqr']
 
-    # ── 3. Evaluate the FULL history window so every country surfaces anomalies ─
-    # Evaluating only the last 48h of stable winter/summer data produces 0 hits.
-    # Scoring the full training window guarantees ~5% flagged (contamination=0.05).
-    # The 30 most anomalous events are returned sorted by composite score.
-    eval_df = hist_df.copy()
+    # ── 3. Build feature matrix for ALL available rows (batch) ────────
+    X_eval = (hist_df[feat_cols]
+              .replace([np.inf, -np.inf], np.nan)
+              .fillna(0)
+              .values.astype(float))
+    Xs_eval = scaler.transform(X_eval)
 
+    # ── 4. Score each detector in one batch call ──────────────────────
+    if_preds  = iso_forest.predict(Xs_eval)           # -1 = anomaly
+    if_scores = -iso_forest.score_samples(Xs_eval)    # higher → more anomalous
+
+    pca_recon  = pca.inverse_transform(pca.transform(Xs_eval))
+    pca_errs   = np.mean((Xs_eval - pca_recon) ** 2, axis=1)
+    pca_preds  = np.where(pca_errs > pca_thr, -1, 1)
+
+    try:
+        svm_preds  = ocsvm.predict(Xs_eval)
+        svm_scores = -ocsvm.score_samples(Xs_eval)
+    except Exception:
+        svm_preds  = np.ones(len(Xs_eval), dtype=int)
+        svm_scores = np.zeros(len(Xs_eval))
+
+    try:
+        ae_recon  = ae.predict(Xs_eval)
+        ae_errs   = np.mean((Xs_eval - ae_recon) ** 2, axis=1)
+        ae_preds  = np.where(ae_errs > ae_thr, -1, 1)
+    except Exception:
+        ae_preds = np.ones(len(Xs_eval), dtype=int)
+        ae_errs  = np.zeros(len(Xs_eval))
+
+    # ── 5. Majority vote ──────────────────────────────────────────────
+    votes = (
+        (if_preds  == -1).astype(int) +
+        (pca_preds == -1).astype(int) +
+        (svm_preds == -1).astype(int) +
+        (ae_preds  == -1).astype(int)
+    )
+    anomaly_mask = votes >= 2
+    # Fallback: if majority vote catches nothing, use IF alone (guaranteed ~5%)
+    if not np.any(anomaly_mask):
+        anomaly_mask = if_preds == -1
+
+    anomaly_indices = np.where(anomaly_mask)[0]
+
+    # ── 6. Build composite score and pick worst 30 ────────────────────
     severity_map = {0: 'low', 1: 'medium', 2: 'high', 3: 'critical'}
     anomalies = []
 
-    for row_i in range(len(eval_df)):
-        row = eval_df.iloc[row_i]
+    for idx in anomaly_indices:
+        row       = hist_df.iloc[idx]
+        x_row     = X_eval[idx]
+        xs_row    = Xs_eval[idx]
 
-        # Build feature vector from actual historical values
-        feat_vals = []
-        for col in hist_cols:
-            raw = row[col] if col in eval_df.columns else 0.0
-            raw = float(raw) if not (raw != raw or np.isinf(raw)) else 0.0
-            feat_vals.append(raw)
+        pca_e  = float(pca_errs[idx])
+        svm_s  = float(max(0, svm_scores[idx]))
+        ae_e   = float(ae_errs[idx]) if len(ae_errs) > idx else 0.0
+        comp   = (float(if_scores[idx])
+                  + pca_e / max(pca_thr, 1e-9)
+                  + svm_s
+                  + ae_e / max(ae_thr,  1e-9)) / 4.0
+        sev_i  = min(3, int(comp * 4))
 
-        X_point = scaler.transform([feat_vals])
-
-        # Run 4 detectors
-        if_pred   = iso_forest.predict(X_point)[0]
-        if_score  = -iso_forest.score_samples(X_point)[0]
-
-        pca_recon = pca.inverse_transform(pca.transform(X_point))
-        pca_err   = float(np.mean((X_point - pca_recon) ** 2))
-        pca_pred  = -1 if pca_err > pca_threshold else 1
-
-        svm_pred  = ocsvm.predict(X_point)[0]
-        svm_score = -ocsvm.score_samples(X_point)[0]
-
-        ae_recon_pt = ae.predict(X_point)
-        ae_err      = float(np.mean((X_point - ae_recon_pt) ** 2))
-        ae_pred     = -1 if ae_err > ae_threshold else 1
-
-        votes = sum(1 for p in [if_pred, pca_pred, svm_pred, ae_pred] if p == -1)
-        is_anomaly = votes >= 2
-
-        if not is_anomaly:
-            continue
-
-        comp_score = (
-            if_score
-            + (pca_err / max(pca_threshold, 1e-9))
-            + max(0, svm_score)
-            + (ae_err / max(ae_threshold, 1e-9))
-        ) / 4.0
-        sev_i = min(3, int(comp_score * 4))
-
-        # Variable attribution: which monitored variable deviated most
-        max_dev, culprit = 0.0, hist_cols[0]
-        for col in hist_cols:
-            val = feat_vals[hist_cols.index(col)]
+        # Variable attribution: largest IQR deviation in monitored cols
+        max_dev, culprit = 0.0, feat_cols[0]
+        for ci, col in enumerate(feat_cols):
             if col in iqr_bounds:
-                b = iqr_bounds[col]
-                dev = max(0.0, val - b['upper'], b['lower'] - val) / b['iqr']
+                b   = iqr_bounds[col]
+                dev = max(0.0, x_row[ci] - b['upper'], b['lower'] - x_row[ci]) / b['iqr']
                 if dev > max_dev:
-                    max_dev = dev
-                    culprit = col
+                    max_dev, culprit = dev, col
 
-        col_val = feat_vals[hist_cols.index(culprit)] if culprit in hist_cols else 0.0
-        bounds  = iqr_bounds.get(culprit, {})
+        ci_culprit = feat_cols.index(culprit)
+        col_val    = float(x_row[ci_culprit])
+        bounds     = iqr_bounds.get(culprit, {})
 
-        # Resolve timestamp
-        ts_raw = row.get('timestamp') if 'timestamp' in eval_df.columns else None
-        if ts_raw is not None:
-            try:
-                ts_str = pd.Timestamp(ts_raw).isoformat() + 'Z'
-            except Exception:
-                ts_str = str(ts_raw)
-        else:
-            ts_str = None
+        # Timestamp (CSV column is 'time')
+        ts_str = None
+        for ts_col in ('time', 'timestamp'):
+            if ts_col in hist_df.columns:
+                try:
+                    ts_str = pd.Timestamp(row[ts_col]).isoformat() + 'Z'
+                except Exception:
+                    ts_str = str(row[ts_col])
+                break
 
         anomalies.append({
             'variable':       culprit.replace('_', ' ').title(),
             'timestamp':      ts_str,
             'value':          round(col_val, 4),
-            'anomaly_score':  round(float(comp_score), 4),
+            'anomaly_score':  round(float(comp), 4),
             'severity':       severity_map[sev_i],
             'model':          'Ensemble (IF + PCA + OCSVM + AE, majority vote)',
             'detector_votes': {
-                'isolation_forest':   if_pred  == -1,
-                'pca_reconstruction': pca_pred == -1,
-                'one_class_svm':      svm_pred == -1,
-                'autoencoder':        ae_pred  == -1,
+                'isolation_forest':   bool(if_preds[idx]  == -1),
+                'pca_reconstruction': bool(pca_preds[idx] == -1),
+                'one_class_svm':      bool(svm_preds[idx] == -1),
+                'autoencoder':        bool(ae_preds[idx]  == -1),
             },
             'bounds': {
                 'lower': round(float(bounds.get('lower', 0)), 3),
@@ -268,8 +271,8 @@ def _run_anomalies():
                         'PCA Reconstruction (threshold=95th pct)',
                         'One-Class SVM (RBF kernel, nu=0.05)',
                         'Autoencoder MLP (threshold=95th pct)'],
-        'ensemble':    'Majority vote ≥ 2/4 detectors',
-        'note':        f'Anomaly detection on {len(eval_df)}h of historical ERA5 data; top events shown.',
+        'ensemble':    'Majority vote ≥ 2/4 detectors (IF fallback if vote=0)',
+        'note':        f'Top anomalies from {len(hist_df)} historical ERA5 rows.',
     })
 
 # Cache for loaded models
