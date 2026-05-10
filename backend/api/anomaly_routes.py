@@ -131,36 +131,20 @@ def get_anomalies():
 
 def _run_anomalies():
     """GET /api/anomaly?country=nigeria&hours=48
-    Chapter 3.6.2 ensemble: Isolation Forest + PCA + One-Class SVM.
-    Fitted on historical ERA5 data; predicted on XGBoost forecast points.
-    Majority vote (≥2/3 sklearn detectors) flags an anomaly.
+    Chapter 3.6.2 ensemble: Isolation Forest + PCA + One-Class SVM + Autoencoder.
+    Fitted on 1440h historical ERA5 data; evaluated on the most recent `hours` rows
+    of the same historical data so real extreme-weather events are detected.
+    Majority vote ≥2/4 detectors flags an anomaly.
     """
     from data_loader import data_loader as dl
-    from model_loader import model_loader
-    from datetime import datetime, timedelta
-    import math
+    from datetime import timezone
 
     country = request.args.get('country', 'nigeria').lower()
     hours   = int(request.args.get('hours', 48))
 
-    _GEO_A = {
-        'nigeria':   {'lat':  9.0,  'utc':  1},
-        'australia': {'lat': -25.0, 'utc': 10},
-        'germany':   {'lat':  51.5, 'utc':  1},
-        'canada':    {'lat':  56.0, 'utc': -5},
-    }
-    def _daytime(ts):
-        geo = _GEO_A.get(country, {'lat': 0, 'utc': 0})
-        lh  = (ts.hour + geo['utc']) % 24
-        lr  = math.radians(geo['lat'])
-        doy = ts.timetuple().tm_yday
-        decl = math.radians(23.45 * math.sin(math.radians(360/365*(doy-81))))
-        cos_ha = max(-1.0, min(1.0, -math.tan(lr)*math.tan(decl)))
-        ha = math.degrees(math.acos(cos_ha))
-        return (12.0 - ha/15.0) <= lh < (12.0 + ha/15.0)
-
-    # ── 1. Load historical training data ─────────────────────────────
-    hist_df = dl.get_latest_data(country, hours=max(hours * 6, 1440))
+    # ── 1. Load historical data (training window + evaluation window) ──
+    train_hours = max(hours * 6, 1440)
+    hist_df = dl.get_latest_data(country, hours=train_hours)
 
     if hist_df is None or hist_df.empty or len(hist_df) < 50:
         return jsonify({'anomalies': [], 'country': country, 'hours': hours,
@@ -181,66 +165,57 @@ def _run_anomalies():
     ae         = det['ae'];    ae_threshold  = det['ae_thr']
     iqr_bounds = det['iqr']
 
-    # ── 3. Get forecast points to evaluate ───────────────────────────
-    now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
-    timestamps = [now + timedelta(hours=i) for i in range(1, hours + 1)]
-
-    solar_fc = model_loader.predict_next_hours(country, hours=hours,
-                                               target='solar_radiation_wm2', model_type='xgb')
-    wind_fc  = model_loader.predict_next_hours(country, hours=hours,
-                                               target='wind_speed',          model_type='xgb')
-
-    solar_preds = [
-        max(0.0, float(v)) if _daytime(timestamps[i]) else 0.0
-        for i, v in enumerate(solar_fc['predictions'])
-    ] if solar_fc else [0.0] * hours
-    wind_preds = [max(0.0, float(v)) for v in wind_fc['predictions']] if wind_fc else [0.0] * hours
+    # ── 3. Evaluate the most recent `hours` rows of real historical data ─
+    eval_df = hist_df.tail(hours).copy()
 
     severity_map = {0: 'low', 1: 'medium', 2: 'high', 3: 'critical'}
     anomalies = []
 
-    for i, ts in enumerate(timestamps):
-        # Build feature vector for this forecast point
+    for row_i in range(len(eval_df)):
+        row = eval_df.iloc[row_i]
+
+        # Build feature vector from actual historical values
         feat_vals = []
         for col in hist_cols:
-            if col == 'solar_radiation_wm2': feat_vals.append(solar_preds[i])
-            elif col == 'wind_speed':        feat_vals.append(wind_preds[i])
-            else:
-                raw = hist_df[col].replace([np.inf, -np.inf], np.nan).mean() if col in hist_df.columns else 0.0
-                feat_vals.append(float(raw) if not np.isnan(raw) else 0.0)
+            raw = row[col] if col in eval_df.columns else 0.0
+            raw = float(raw) if not (raw != raw or np.isinf(raw)) else 0.0
+            feat_vals.append(raw)
 
-        # Guard against any remaining NaN/Inf before passing to sklearn
-        feat_vals = [0.0 if (v != v or np.isinf(v)) else v for v in feat_vals]
         X_point = scaler.transform([feat_vals])
 
         # Run 4 detectors
-        if_pred   = iso_forest.predict(X_point)[0]          # -1 = anomaly
-        if_score  = -iso_forest.score_samples(X_point)[0]   # higher = more anomalous
+        if_pred   = iso_forest.predict(X_point)[0]
+        if_score  = -iso_forest.score_samples(X_point)[0]
 
-        pca_recon  = pca.inverse_transform(pca.transform(X_point))
-        pca_err    = float(np.mean((X_point - pca_recon) ** 2))
-        pca_pred   = -1 if pca_err > pca_threshold else 1
+        pca_recon = pca.inverse_transform(pca.transform(X_point))
+        pca_err   = float(np.mean((X_point - pca_recon) ** 2))
+        pca_pred  = -1 if pca_err > pca_threshold else 1
 
-        svm_pred   = ocsvm.predict(X_point)[0]              # -1 = anomaly
-        svm_score  = -ocsvm.score_samples(X_point)[0]
+        svm_pred  = ocsvm.predict(X_point)[0]
+        svm_score = -ocsvm.score_samples(X_point)[0]
 
         ae_recon_pt = ae.predict(X_point)
         ae_err      = float(np.mean((X_point - ae_recon_pt) ** 2))
         ae_pred     = -1 if ae_err > ae_threshold else 1
 
         votes = sum(1 for p in [if_pred, pca_pred, svm_pred, ae_pred] if p == -1)
-        is_anomaly = votes >= 2   # majority vote ≥2/4 (Chapter 3.6.2)
+        is_anomaly = votes >= 2
 
         if not is_anomaly:
             continue
 
-        # Composite anomaly score (normalised average across 4 detectors)
-        comp_score = (if_score + (pca_err / max(pca_threshold, 1e-9)) + max(0, svm_score) + (ae_err / max(ae_threshold, 1e-9))) / 4.0
+        comp_score = (
+            if_score
+            + (pca_err / max(pca_threshold, 1e-9))
+            + max(0, svm_score)
+            + (ae_err / max(ae_threshold, 1e-9))
+        ) / 4.0
         sev_i = min(3, int(comp_score * 4))
 
-        # Variable attribution: which variable deviated most from IQR
-        max_dev, culprit = 0.0, 'solar_radiation_wm2'
-        for col, val in [('solar_radiation_wm2', solar_preds[i]), ('wind_speed', wind_preds[i])]:
+        # Variable attribution: which monitored variable deviated most
+        max_dev, culprit = 0.0, hist_cols[0]
+        for col in hist_cols:
+            val = feat_vals[hist_cols.index(col)]
             if col in iqr_bounds:
                 b = iqr_bounds[col]
                 dev = max(0.0, val - b['upper'], b['lower'] - val) / b['iqr']
@@ -248,13 +223,22 @@ def _run_anomalies():
                     max_dev = dev
                     culprit = col
 
-        col_label = culprit.replace('_', ' ').title()
-        col_val = solar_preds[i] if 'solar' in culprit else wind_preds[i]
-        bounds = iqr_bounds.get(culprit, {})
+        col_val = feat_vals[hist_cols.index(culprit)] if culprit in hist_cols else 0.0
+        bounds  = iqr_bounds.get(culprit, {})
+
+        # Resolve timestamp
+        ts_raw = row.get('timestamp') if 'timestamp' in eval_df.columns else None
+        if ts_raw is not None:
+            try:
+                ts_str = pd.Timestamp(ts_raw).isoformat() + 'Z'
+            except Exception:
+                ts_str = str(ts_raw)
+        else:
+            ts_str = None
 
         anomalies.append({
-            'variable':       col_label,
-            'timestamp':      ts.isoformat() + 'Z',
+            'variable':       culprit.replace('_', ' ').title(),
+            'timestamp':      ts_str,
             'value':          round(col_val, 4),
             'anomaly_score':  round(float(comp_score), 4),
             'severity':       severity_map[sev_i],
@@ -269,7 +253,7 @@ def _run_anomalies():
                 'lower': round(float(bounds.get('lower', 0)), 3),
                 'upper': round(float(bounds.get('upper', 0)), 3),
             } if bounds else None,
-            'type': 'predicted',
+            'type': 'historical',
         })
 
     anomalies.sort(key=lambda x: x['anomaly_score'], reverse=True)
@@ -278,12 +262,12 @@ def _run_anomalies():
         'hours':       hours,
         'n_anomalies': len(anomalies),
         'anomalies':   anomalies[:30],
-        'detectors':   ['Isolation Forest (n=100, contamination=0.05)',
-                        'PCA Reconstruction (95% variance, threshold=95th pct)',
+        'detectors':   ['Isolation Forest (n=50, contamination=0.05)',
+                        'PCA Reconstruction (threshold=95th pct)',
                         'One-Class SVM (RBF kernel, nu=0.05)',
-                        'Autoencoder MLP (bottleneck reconstruction, threshold=95th pct)'],
+                        'Autoencoder MLP (threshold=95th pct)'],
         'ensemble':    'Majority vote ≥ 2/4 detectors',
-        'note':        f'Chapter 3.6.2 ensemble anomaly detection on {hours}h XGBoost forecast.',
+        'note':        f'Anomaly detection on the most recent {hours}h of historical ERA5 data.',
     })
 
 # Cache for loaded models
