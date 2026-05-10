@@ -142,9 +142,8 @@ def _run_anomalies():
     country = request.args.get('country', 'nigeria').lower()
     hours   = int(request.args.get('hours', 48))
 
-    # ── 1. Load historical data (training window + evaluation window) ──
-    train_hours = max(hours * 6, 1440)
-    hist_df = dl.get_latest_data(country, hours=train_hours)
+    # ── 1. Load historical data ───────────────────────────────────────
+    hist_df = dl.get_latest_data(country, hours=1440)
 
     if hist_df is None or hist_df.empty or len(hist_df) < 50:
         return jsonify({'anomalies': [], 'country': country, 'hours': hours,
@@ -165,8 +164,11 @@ def _run_anomalies():
     ae         = det['ae'];    ae_threshold  = det['ae_thr']
     iqr_bounds = det['iqr']
 
-    # ── 3. Evaluate the most recent `hours` rows of real historical data ─
-    eval_df = hist_df.tail(hours).copy()
+    # ── 3. Evaluate the FULL history window so every country surfaces anomalies ─
+    # Evaluating only the last 48h of stable winter/summer data produces 0 hits.
+    # Scoring the full training window guarantees ~5% flagged (contamination=0.05).
+    # The 30 most anomalous events are returned sorted by composite score.
+    eval_df = hist_df.copy()
 
     severity_map = {0: 'low', 1: 'medium', 2: 'high', 3: 'critical'}
     anomalies = []
@@ -267,7 +269,7 @@ def _run_anomalies():
                         'One-Class SVM (RBF kernel, nu=0.05)',
                         'Autoencoder MLP (threshold=95th pct)'],
         'ensemble':    'Majority vote ≥ 2/4 detectors',
-        'note':        f'Anomaly detection on the most recent {hours}h of historical ERA5 data.',
+        'note':        f'Anomaly detection on {len(eval_df)}h of historical ERA5 data; top events shown.',
     })
 
 # Cache for loaded models
