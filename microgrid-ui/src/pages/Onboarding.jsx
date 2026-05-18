@@ -426,7 +426,7 @@ export default function Onboarding({ onComplete }) {
 const s = {
   page: {
     minHeight: '100vh', display: 'flex', flexDirection: 'row',
-    background: '#040E1C', position: 'relative', overflow: 'hidden',
+    background: '#040E1C', position: 'relative', overflowX: 'hidden',
   },
 
   /* Left panel */
@@ -477,8 +477,8 @@ const s = {
 
   /* Right panel */
   rightPanel: {
-    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-    padding: '48px 32px', position: 'relative', zIndex: 2,
+    flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+    padding: '48px 32px', position: 'relative', zIndex: 2, overflowY: 'auto',
   },
   card: {
     background: 'rgba(7,21,37,0.85)', backdropFilter: 'blur(20px)',
