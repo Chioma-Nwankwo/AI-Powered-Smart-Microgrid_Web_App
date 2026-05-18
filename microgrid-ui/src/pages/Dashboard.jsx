@@ -20,6 +20,7 @@ const COUNTRY_TZ = {
 };
 
 function EnergyProfileCard({ profile, country }) {
+  const { t }     = useLanguage();
   const catalog   = APPLIANCE_CATALOG[profile.building_type] ?? APPLIANCE_CATALOG.residential;
   const savedQtys = Object.fromEntries((profile.appliances || []).map(a => [a.id, a.qty]));
   const curr      = CURRENCY[(country || 'nigeria').toLowerCase()] ?? CURRENCY.nigeria;
@@ -41,30 +42,30 @@ function EnergyProfileCard({ profile, country }) {
     <div style={ep.card} className="fade-up fade-up-3">
       <div style={ep.header}>
         <Zap size={14} color="var(--brown)" />
-        <span style={ep.title}>Energy Profile</span>
-        <span style={ep.sub}>— based on your appliances</span>
+        <span style={ep.title}>{t('energyProfile')}</span>
+        <span style={ep.sub}>{t('applianceBased')}</span>
       </div>
       <div style={ep.metrics}>
         <div style={ep.metric}>
           <span style={{ ...ep.metricVal, color: intensity }}>{(profile.peak_demand_kw || 0).toFixed(1)} kW</span>
-          <span style={ep.metricLabel}>Peak demand</span>
+          <span style={ep.metricLabel}>{t('peakDemand')}</span>
         </div>
         <div style={ep.divider} />
         <div style={ep.metric}>
           <span style={ep.metricVal}>{(profile.daily_kwh || 0).toFixed(1)} kWh</span>
-          <span style={ep.metricLabel}>Daily usage</span>
+          <span style={ep.metricLabel}>{t('dailyUsage')}</span>
         </div>
         <div style={ep.divider} />
         <div style={ep.metric}>
           <span style={ep.metricVal}>{costStr}</span>
-          <span style={ep.metricLabel}>Est. monthly bill</span>
+          <span style={ep.metricLabel}>{t('estMonthlyBill')}</span>
         </div>
         {ranked.length > 0 && (
           <>
             <div style={ep.divider} />
             <div style={ep.metric}>
               <span style={ep.metricVal}>{ranked.map(a => `${a.icon} ×${a.qty}`).join('  ')}</span>
-              <span style={ep.metricLabel}>Top consumers</span>
+              <span style={ep.metricLabel}>{t('topConsumers')}</span>
             </div>
           </>
         )}

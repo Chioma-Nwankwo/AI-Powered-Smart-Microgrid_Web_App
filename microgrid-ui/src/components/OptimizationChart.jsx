@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import { Zap, RefreshCw } from 'lucide-react';
 import { getOptimization } from '../services/api';
+import { useLanguage } from '../context/LanguageContext';
 
 const AUTO_REFRESH_MS = 15 * 60 * 1000; // re-fetch every 15 minutes
 
@@ -35,6 +36,7 @@ const BUILDING_CAPACITY = {
 };
 
 export default function OptimizationChart({ country }) {
+  const { t } = useLanguage();
   const [data,      setData]      = useState([]);
   const [summary,   setSummary]   = useState(null);
   const [solver,    setSolver]    = useState(null);
@@ -85,7 +87,7 @@ export default function OptimizationChart({ country }) {
       <div style={s.header}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
           <Zap size={15} color="var(--caramel, var(--brown))" />
-          <span style={s.title}>BATTERY OPTIMIZATION</span>
+          <span style={s.title}>{t('batteryOptimization')}</span>
           <span style={s.subtitle}>— local time · LP/MILP</span>
           {solver && (
             <span style={s.solverBadge}>
@@ -102,8 +104,8 @@ export default function OptimizationChart({ country }) {
           </button>
           {summary && (
             <div style={s.kpiRow}>
-              <KPI label="Cost savings"   value={`${summary.cost_savings_pct?.toFixed(1) ?? '—'}%`} color="var(--green)" />
-              <KPI label="RE utilized"    value={`${summary.renewable_utilization_pct?.toFixed(1) ?? '—'}%`} color="var(--brown)" />
+              <KPI label={t('costSavings')} value={`${summary.cost_savings_pct?.toFixed(1) ?? '—'}%`} color="var(--green)" />
+              <KPI label={t('solarUtil')}  value={`${summary.renewable_utilization_pct?.toFixed(1) ?? '—'}%`} color="var(--brown)" />
             </div>
           )}
         </div>

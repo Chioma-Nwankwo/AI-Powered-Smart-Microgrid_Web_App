@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { AlertTriangle, CheckCircle, AlertCircle, XCircle, ShieldAlert } from 'lucide-react';
 import { getAnomalies } from '../services/api';
 import { formatDistanceToNow } from 'date-fns';
+import { useLanguage } from '../context/LanguageContext';
 
 const SEVERITY = {
   critical: { icon: XCircle,       color: '#B03A2E', bg: 'rgba(176,58,46,0.08)',  label: 'CRITICAL' },
@@ -11,6 +12,7 @@ const SEVERITY = {
 };
 
 export default function AnomalyPanel({ country }) {
+  const { t } = useLanguage();
   const [anomalies, setAnomalies] = useState([]);
   const [loading,   setLoading]   = useState(false);
   const [error,     setError]     = useState(false);
@@ -34,7 +36,7 @@ export default function AnomalyPanel({ country }) {
       <div style={s.header}>
         <div style={s.titleRow}>
           <ShieldAlert size={15} color={critCount > 0 ? 'var(--red)' : 'var(--green)'} />
-          <span style={s.title}>ANOMALY DETECTION</span>
+          <span style={s.title}>{t('anomalyDetection')}</span>
           <span style={s.subtitle}>— IF · PCA · OCSVM · AE ensemble</span>
         </div>
         <span style={{
@@ -53,7 +55,7 @@ export default function AnomalyPanel({ country }) {
           <div style={s.empty}>
             <CheckCircle size={26} color="#1A7A3F" />
             <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 8, fontFamily: 'var(--font-mono)' }}>
-              No anomalies in the last 48 hours
+              {t('noAnomalies')}
             </p>
           </div>
         )}
