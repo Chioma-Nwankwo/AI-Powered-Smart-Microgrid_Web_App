@@ -6,6 +6,7 @@ import ApplianceCalculator from '../components/ApplianceCalculator';
 import { Zap, MapPin, Building2, ClipboardList, CheckCircle } from 'lucide-react';
 import { detectLocation, updateProfile } from '../services/api';
 import useIsMobile from '../hooks/useIsMobile';
+import { useLanguage } from '../context/LanguageContext';
 
 const COUNTRIES_LIST = [
   { key: 'nigeria',   flag: '🇳🇬', label: 'Nigeria',   states: ['FCT', 'Lagos', 'Kano', 'Rivers', 'Oyo', 'Kaduna', 'Anambra', 'Enugu', 'Imo', 'Other'] },
@@ -49,10 +50,10 @@ const BUILDING_FIELDS = {
 };
 
 const STEPS = [
-  { label: 'Location',      icon: MapPin },
-  { label: 'Building type', icon: Building2 },
-  { label: 'Appliances',    icon: Zap },
-  { label: 'Details',       icon: ClipboardList },
+  { tKey: 'locationStep',     icon: MapPin },
+  { tKey: 'buildingTypeStep', icon: Building2 },
+  { tKey: 'appliancesStep',   icon: Zap },
+  { tKey: 'detailsStep',      icon: ClipboardList },
 ];
 
 // State/city-level coordinates for map navigation after onboarding
@@ -98,6 +99,7 @@ export default function Onboarding({ onComplete }) {
   const { user } = useAuth();
   const navigate  = useNavigate();
   const isMobile  = useIsMobile();
+  const { t }     = useLanguage();
   const [step,    setStep]    = useState(0);
   const [country, setCountry] = useState('');
   const [state,   setState]   = useState('');
@@ -240,7 +242,7 @@ export default function Onboarding({ onComplete }) {
         <div style={{ ...s.card, padding: isMobile ? '24px 18px' : '36px 40px' }}>
           {/* Progress stepper */}
           <div style={s.stepper}>
-            {STEPS.map(({ label, icon: Icon }, i) => (
+            {STEPS.map(({ tKey, icon: Icon }, i) => (
               <div key={i} style={s.stepperItem}>
                 <div style={{
                   ...s.stepDot,
@@ -255,7 +257,7 @@ export default function Onboarding({ onComplete }) {
                   ...s.stepLabel,
                   ...(step >= i ? { color: step === i ? '#F59E0B' : 'var(--text-secondary)' } : {}),
                 }}>
-                  {label}
+                  {t(tKey)}
                 </span>
                 {i < STEPS.length - 1 && (
                   <div style={{ ...s.stepLine, ...(step > i ? s.stepLineActive : {}) }} />
@@ -267,7 +269,7 @@ export default function Onboarding({ onComplete }) {
           {/* Step 0: Country + State */}
           {step === 0 && (
             <div>
-              <h2 style={s.stepTitle}>Where is your microgrid located?</h2>
+              <h2 style={s.stepTitle}>{t('onboardingLocationTitle')}</h2>
               <p style={s.stepDesc}>Select your country and region to calibrate ERA5 climate data.</p>
 
               {/* Auto-detect banner */}
@@ -330,7 +332,7 @@ export default function Onboarding({ onComplete }) {
                 disabled={!country || !state}
                 style={{ ...s.nextBtn, ...(!country || !state ? s.btnDisabled : {}) }}
               >
-                Continue →
+                {t('continueBtn')} →
               </button>
             </div>
           )}
@@ -338,7 +340,7 @@ export default function Onboarding({ onComplete }) {
           {/* Step 1: Building type */}
           {step === 1 && (
             <div>
-              <h2 style={s.stepTitle}>What type of building?</h2>
+              <h2 style={s.stepTitle}>{t('onboardingBuildingTitle')}</h2>
               <p style={s.stepDesc}>This tailors your energy forecast and anomaly thresholds.</p>
               <div style={s.btypeGrid}>
                 {BUILDING_TYPES.map(b => (
@@ -346,7 +348,7 @@ export default function Onboarding({ onComplete }) {
                     style={{ ...s.btypeCard, ...(btype === b.key ? s.btypeCardActive : {}) }}>
                     <span style={s.btypeIcon}>{b.icon}</span>
                     <div>
-                      <span style={s.btypeLabel}>{b.label}</span>
+                      <span style={s.btypeLabel}>{t('bt' + b.key.charAt(0).toUpperCase() + b.key.slice(1)) || b.label}</span>
                       <span style={s.btypeDesc}>{b.desc}</span>
                     </div>
                     {btype === b.key && (
@@ -356,10 +358,10 @@ export default function Onboarding({ onComplete }) {
                 ))}
               </div>
               <div style={s.navRow}>
-                <button onClick={() => setStep(0)} style={s.backBtn}>← Back</button>
+                <button onClick={() => setStep(0)} style={s.backBtn}>← {t('backBtn')}</button>
                 <button onClick={() => setStep(2)} disabled={!btype}
                   style={{ ...s.nextBtn, ...(!btype ? s.btnDisabled : {}) }}>
-                  Continue →
+                  {t('continueBtn')} →
                 </button>
               </div>
             </div>
@@ -368,7 +370,7 @@ export default function Onboarding({ onComplete }) {
           {/* Step 2: Appliances */}
           {step === 2 && (
             <div>
-              <h2 style={s.stepTitle}>What appliances do you have?</h2>
+              <h2 style={s.stepTitle}>{t('onboardingAppliancesTitle')}</h2>
               <p style={s.stepDesc}>Set how many of each appliance your building uses — GridAI calculates your load profile automatically.</p>
               <ApplianceCalculator
                 buildingType={btype}
@@ -380,9 +382,9 @@ export default function Onboarding({ onComplete }) {
                 }
               />
               <div style={s.navRow}>
-                <button onClick={() => setStep(1)} style={s.backBtn}>← Back</button>
+                <button onClick={() => setStep(1)} style={s.backBtn}>← {t('backBtn')}</button>
                 <button onClick={() => setStep(3)} style={s.nextBtn}>
-                  Continue →
+                  {t('continueBtn')} →
                 </button>
               </div>
             </div>
@@ -391,7 +393,7 @@ export default function Onboarding({ onComplete }) {
           {/* Step 3: Building details */}
           {step === 3 && (
             <div>
-              <h2 style={s.stepTitle}>Building details</h2>
+              <h2 style={s.stepTitle}>{t('onboardingDetailsTitle')}</h2>
               <p style={s.stepDesc}>Fill in what you can — all fields are optional.</p>
               <div style={s.fieldsGrid}>
                 {(BUILDING_FIELDS[btype] || []).map(f => (
@@ -409,10 +411,10 @@ export default function Onboarding({ onComplete }) {
               </div>
               {error && <p style={s.error}>{error}</p>}
               <div style={s.navRow}>
-                <button onClick={() => setStep(2)} style={s.backBtn}>← Back</button>
+                <button onClick={() => setStep(2)} style={s.backBtn}>← {t('backBtn')}</button>
                 <button onClick={handleSave} disabled={saving}
                   style={{ ...s.nextBtn, ...(saving ? s.btnDisabled : {}) }}>
-                  {saving ? 'Connecting…' : 'Connect to Grid →'}
+                  {saving ? t('connectingBtn') : `${t('connectToGrid')} →`}
                 </button>
               </div>
             </div>
@@ -425,8 +427,8 @@ export default function Onboarding({ onComplete }) {
 
 const s = {
   page: {
-    minHeight: '100vh', display: 'flex', flexDirection: 'row',
-    background: '#040E1C', position: 'relative', overflowX: 'hidden',
+    height: '100vh', display: 'flex', flexDirection: 'row',
+    background: '#040E1C', position: 'relative', overflow: 'hidden',
   },
 
   /* Left panel */
@@ -531,7 +533,7 @@ const s = {
     boxShadow: '0 0 20px rgba(245,158,11,0.12)',
   },
   countryFlag: { fontSize: 28 },
-  countryCardLabel: { fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' },
+  countryCardLabel: { fontSize: 13, fontWeight: 600, color: '#E5F4FF' },
   countryCheck: { position: 'absolute', top: 8, right: 8 },
 
   /* Building type */
@@ -550,7 +552,7 @@ const s = {
   btypeIcon: { fontSize: 22, flexShrink: 0 },
   btypeLabel: {
     display: 'block', fontWeight: 600, fontSize: 14,
-    color: 'var(--text-primary)', marginBottom: 2,
+    color: '#E5F4FF', marginBottom: 2,
   },
   btypeDesc: { display: 'block', fontSize: 11, color: 'var(--text-muted)' },
 

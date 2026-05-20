@@ -302,7 +302,7 @@ function StatBox({ label, value, sub, color }) {
 
 const s = {
   shell:   { display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg-base)' },
-  main:    { flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto', padding: '0 0 60px' },
+  main:    { flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 0 60px' },
   toolbar: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
     padding: '12px 32px', borderBottom: '1px solid rgba(245,158,11,0.08)',

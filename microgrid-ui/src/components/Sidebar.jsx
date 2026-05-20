@@ -133,10 +133,12 @@ export default function Sidebar({ selectedCountry, onCountryChange }) {
         <div style={s.userSection}>
           {user?.picture
             ? <img src={user.picture} alt="" style={s.avatar} />
-            : <div style={s.avatarFallback}>{user?.name?.[0]?.toUpperCase() ?? '?'}</div>
+            : <div style={s.avatarFallback}>
+                {(user?.name?.[0] || user?.email?.[0] || 'U').toUpperCase()}
+              </div>
           }
           <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={s.userName}>{user?.name ?? 'User'}</p>
+            <p style={s.userName}>{user?.name || user?.email?.split('@')[0] || 'User'}</p>
             <p style={s.userEmail}>{user?.email ?? ''}</p>
           </div>
           <button onClick={signOut} style={s.logoutBtn} title={t('signOut')}>
