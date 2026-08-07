@@ -1,4 +1,5 @@
 # AI-Powered Smart Microgrid Web Application
+App Link: https://ai-powered-smart-microgrid-web-app.vercel.app/login
 
 **Final Year Project — Nile University of Nigeria**  
 Chioma Nwankwo · B.Sc. Computer Science
